@@ -1,78 +1,104 @@
-## Introduction
+# education-planner
 
-This is a simple pipeline example for a .NET Core application, showing just
-how easy it is to get up and running with .NET development using GitLab.
+Dieses Repository enthält derzeit ausschließlich das unveränderte Gerüst der
+GitLab-CI-Vorlage für .NET-Core-Konsolenanwendungen (`dotnet new console`):
+eine `Program.cs`, die `Hello World!` ausgibt, ein Projektfile
+`dotnetcore.csproj`, eine GitLab-Pipeline und eine Gitpod-Konfiguration.
+Eigene Fachlogik ist nicht vorhanden – der Name des Repositories legt einen
+Lern- bzw. Bildungsplaner nahe, im Code ist davon nichts umgesetzt.
+Der Import erfolgte am 2026-10-23 aus Google Drive ("Import aus Google Drive"),
+danach wurden README und `.gitignore` ergänzt.
 
-# Reference links
+## Funktionen
 
-- [GitLab CI Documentation](https://docs.gitlab.com/ee/ci/)
-- [.NET Hello World tutorial](https://dotnet.microsoft.com/learn/dotnet/hello-world-tutorial/)
+Aus dem Code belegbar ist ausschließlich:
 
-If you're new to .NET you'll want to check out the tutorial, but if you're
-already a seasoned developer considering building your own .NET app with GitLab,
-this should all look very familiar.
+- **Konsolenausgabe**: `Program.Main` schreibt genau eine Zeile, `Hello World!`,
+  nach stdout (`Program.cs`). Es gibt keine Argumentauswertung – der Parameter
+  `args` wird nicht verwendet.
+- **Keine Ein-/Ausgabe**: keine Konsoleneingabe, kein Dateizugriff, keine
+  Datenbank, kein Netzwerkzugriff.
+- **Keine Datenmodelle**: außer der Klasse `Program` existiert kein Typ.
+- **Build-Pipeline**: `.gitlab-ci.yml` definiert die Stages `build`, `test` und
+  `deploy`; `deploy` ist ein Platzhalter (`echo "Define your deployment script!"`).
+- **Automatisierte Dev-Umgebung**: `.gitpod.yml` baut das Projekt beim Start
+  (`init: dotnet build`) und führt es anschließend aus (`command: dotnet run`).
 
-## What's contained in this project
+## Technik
 
-The root of the repository contains the out of the `dotnet new console` command,
-which generates a new console application that just prints out "Hello, World."
-It's a simple example, but great for demonstrating how easy GitLab CI is to
-use with .NET. Check out the `Program.cs` and `dotnetcore.csproj` files to
-see how these work.
+- **Projektformat**: SDK-Style-Projekt, `Microsoft.NET.Sdk`, keine Solution-Datei.
+- **Ausgabetyp**: `Exe` (Konsolenanwendung).
+- **Zielframework**: `net7.0`.
+- **Abhängigkeiten**: keine – das csproj enthält weder `PackageReference` noch
+  `ProjectReference`; es gibt keine `packages.config` und kein `package.json`.
+- **Namespace**: `dotnetcore`.
+- **CI-Image**: `mcr.microsoft.com/dotnet/sdk:7.0`.
+- **Sprache im Repo**: C# (laut GitHub-Sprachstatistik die einzige Sprache).
+- **Lizenz**: MIT, Copyright-Hinweis im Lizenztext nennt GitLab B.V. (2019–present).
 
-In addition to the .NET Core content, there is a ready-to-go `.gitignore` file
-sourced from the the .NET Core [.gitignore](https://github.com/dotnet/core/blob/master/.gitignore). This
-will help keep your repository clean of build files and other configuration.
-
-Finally, the `.gitlab-ci.yml` contains the configuration needed for GitLab
-to build your code. Let's take a look, section by section.
-
-First, we note that we want to use the official Microsoft .NET SDK image
-to build our project.
-
-```
-image: microsoft/dotnet:latest
-```
-
-We're defining two stages here: `build`, and `test`. As your project grows
-in complexity you can add more of these.
-
-```
-stages:
-    - build
-    - test
-```
-
-Next, we define our build job which simply runs the `dotnet build` command and
-identifies the `bin` folder as the output directory. Anything in the `bin` folder
-will be automatically handed off to future stages, and is also downloadable through
-the web UI.
+## Projektstruktur
 
 ```
-build:
-    stage: build
-    script:
-        - "dotnet build"
-    artifacts:
-      paths:
-        - bin/
+education-planner/
+├── Program.cs            Einstiegspunkt, gibt "Hello World!" aus
+├── dotnetcore.csproj      Projektfile: Exe, net7.0, keine Pakete
+├── README.md             diese Datei
+├── CONTRIBUTING.md       DCO-/Lizenzhinweis und Code of Conduct (GitLab-Vorlage)
+├── LICENSE               MIT-Lizenztext, Copyright GitLab B.V.
+├── .gitlab-ci.yml        Pipeline: restore, build, test, deploy-Platzhalter
+├── .gitpod.yml           Gitpod-Image, Init-Build, Start via dotnet run
+├── .gitignore            .NET-Artefakte, Obsidian-, Syncthing- und Dump-Regeln
+└── .gitattributes        Zeilenenden: * text=auto
 ```
 
-Similar to the build step, we get our test output simply by running `dotnet test`.
+Es gibt keine Unterverzeichnisse, keine Testprojekte und keine Dokumentation
+über die genannten Dateien hinaus.
 
+## Start
+
+Voraussetzung ist ein .NET-SDK, das `net7.0` bauen kann. Alle Befehle beziehen
+sich auf das Repository-Wurzelverzeichnis.
+
+```bash
+# Abhängigkeiten wiederherstellen (Option aus der CI)
+dotnet restore --packages .nuget
+
+# Bauen (so nutzt es auch die CI, nach dem Restore)
+dotnet build --no-restore
+
+# Starten (so konfiguriert in .gitpod.yml)
+dotnet run
 ```
-test:
-    stage: test
-    script: 
-        - "dotnet test"
-```
 
-This should be enough to get you started. There are many, many powerful options 
-for your `.gitlab-ci.yml`. You can read about them in our documentation 
-[here](https://docs.gitlab.com/ee/ci/yaml/).
+Erwartete Ausgabe von `dotnet run`: `Hello World!`
 
-## Developing with Gitpod
+`dotnet test --no-restore` ist in der Pipeline als Job `tests` definiert, im
+Repository existiert jedoch kein Testprojekt, das dieser Befehl ausführen könnte.
 
-This template repository also has a fully-automated dev setup for [Gitpod](https://docs.gitlab.com/ee/integration/gitpod.html).
+## Konfiguration
 
-The `.gitpod.yml` ensures that, when you open this repository in Gitpod, you'll get a cloud workspace with .NET Core pre-installed, and your project will automatically be built and start running.
+Eine `.env.example` existiert im Repository nicht; es werden keine Umgebungs-
+variablen aus einer `.env` gelesen und es sind keine Secrets hinterlegt.
+
+Konfigurierbar sind nur die Variablen der CI-Datei `.gitlab-ci.yml` (Namen):
+
+- `OBJECTS_DIRECTORY`
+- `NUGET_PACKAGES_DIRECTORY`
+- `SOURCE_CODE_PATH`
+
+## Hinweise
+
+- Der Inhalt ist die GitLab-Vorlage "dotNET-Core"; README, `CONTRIBUTING.md` und
+  `LICENSE` stammen aus dieser Vorlage und beziehen sich auf GitLab B.V. bzw.
+  auf GitLab als Plattform, obwohl das Repository auf GitHub liegt.
+- `SOURCE_CODE_PATH` steht auf `*/*/`, was auf eine Struktur mit zwei
+  Verzeichnisebenen zielt. Das Projekt liegt flach im Wurzelverzeichnis, die
+  Cache-Pfade der Pipeline greifen daher voraussichtlich nicht.
+- `net7.0` ist nicht mehr im Support; ein Update des Zielframeworks und des
+  CI-Images wäre vor weiterer Entwicklung sinnvoll.
+- Die `.gitignore` enthält Blöcke zu Obsidian, Syncthing und Datenbank-Dumps,
+  die zu diesem Projekt keinen Bezug haben.
+- Das Repository hat keine Beschreibung und keinen Git-Tag; die Historie umfasst
+  drei Commits (Import, README/.gitignore, Aufräumen der `.gitignore`).
+- Vor dem Ausbau zu einem tatsächlichen Planer fehlen Datenmodell, Persistenz,
+  Tests und eine Beschreibung der geplanten Funktionen.
