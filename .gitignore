@@ -39,3 +39,32 @@
 # Add below lines to exclude OS settings and caches
 .trash/
 .DS_Store
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs und Temp
+*.log
+*.tmp
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Datenbanken und Dumps
+*.sqlite
+*.sqlite3
+*.db
+dumps/
