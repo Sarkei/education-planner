@@ -15,6 +15,8 @@ import {
   Folder,
   FolderPlus,
   Image as ImageIcon,
+  LayoutGrid,
+  List,
   Pencil,
   Music,
   Presentation,
@@ -79,6 +81,8 @@ export function FilesPage() {
   const [menu, setMenu] = useState<{ x: number; y: number; node: NodeItem | null } | null>(null);
   const [clipboard, setClipboard] = useState<{ mode: 'copy' | 'cut'; node: NodeItem } | null>(null);
   const [fileDialog, setFileDialog] = useState<{ parentId: string | null; parentName: string } | null>(null);
+  const [view, setView] = useState<'list' | 'grid'>(() => (localStorage.getItem('eduplanner.view') as 'list' | 'grid') || 'list');
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -305,6 +309,30 @@ export function FilesPage() {
     return entries;
   }
 
+  // In der Galerie: Vorschau-Links für alle Bilder des Ordners in einem Aufruf
+  useEffect(() => {
+    if (view !== 'grid') return;
+    const images = children.filter((n) => n.kind === 'file' && /^(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico)$/i.test(n.name.split('.').pop() ?? ''));
+    if (!images.length) {
+      setThumbs({});
+      return;
+    }
+    let cancelled = false;
+    void api<{ urls: Record<string, string> }>('/nodes/preview-tokens', { body: { ids: images.map((i) => i.id) } })
+      .then((data) => {
+        if (!cancelled) setThumbs(data.urls);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [view, children]);
+
+  function switchView(next: 'list' | 'grid') {
+    setView(next);
+    localStorage.setItem('eduplanner.view', next);
+  }
+
   const sharedRoots = nodes.filter((n) => n.shared);
   const currentTitle = breadcrumb.length ? breadcrumb[breadcrumb.length - 1].name : 'Alle Dateien';
 
@@ -378,6 +406,22 @@ export function FilesPage() {
               hint={`${children.length} ${children.length === 1 ? 'Eintrag' : 'Einträge'} · Dateien liegen als echte Dateien auf dem NAS`}
               action={
                 <div className="flex gap-1.5">
+                  <div className="pill-nav !p-0.5">
+                    <button
+                      className={`pill !px-2 !py-1.5 ${view === 'list' ? 'active' : ''}`}
+                      onClick={() => switchView('list')}
+                      title="Listenansicht"
+                    >
+                      <List className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      className={`pill !px-2 !py-1.5 ${view === 'grid' ? 'active' : ''}`}
+                      onClick={() => switchView('grid')}
+                      title="Galerieansicht"
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
                     <FolderPlus className="h-3.5 w-3.5" /> Ordner
                   </button>
@@ -448,6 +492,61 @@ export function FilesPage() {
                   </button>
                 }
               />
+            ) : view === 'grid' ? (
+              <div
+                className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+                onContextMenu={(e) => {
+                  if ((e.target as HTMLElement).closest('.tile')) return;
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, node: null });
+                }}
+              >
+                {children.map((node) => {
+                  const isImage = node.kind === 'file' && !!thumbs[node.id];
+                  return (
+                    <div
+                      key={node.id}
+                      className="tile card group relative overflow-hidden"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', node.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragOver={(e) => {
+                        if (node.kind !== 'folder') return;
+                        e.preventDefault();
+                        setDropTarget(node.id);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDropTarget(null);
+                        const dragId = e.dataTransfer.getData('text/plain');
+                        if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
+                      }}
+                      onClick={() => open(node)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setMenu({ x: e.clientX, y: e.clientY, node });
+                      }}
+                      title={node.name}
+                    >
+                      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-[var(--bg-soft)]">
+                        {isImage ? (
+                          <img src={thumbs[node.id]} alt={node.name} loading="lazy" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="scale-[2] opacity-60">{iconFor(node)}</span>
+                        )}
+                      </div>
+                      <div className="border-t border-[var(--line)] px-2.5 py-2">
+                        <p className="truncate text-[12.5px] font-medium">{node.name}</p>
+                        <p className="text-[10.5px] text-muted">
+                          {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div
                 className="space-y-1.5"
