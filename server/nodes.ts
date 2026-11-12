@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { pool } from './db';
 import { canWrite, fail, loadNode, nodeAccess, requireAuth, type AuthRequest, type NodeRow } from './guards';
 import { absolute, copyPath, ensureDirs, movePath, relative as relativePath, safeName, saveVersion, TRASH_ROOT, writeAtomic } from './storage';
-import { emptyFileFor } from './templates';
+import { emptyFileFor, mimeFor } from './templates';
 import { indexNode } from './indexer';
 
 export const nodesRouter = Router();
@@ -172,18 +172,6 @@ async function copySubtree(node: NodeRow, parentId: string | null, parentPath: s
   return id;
 }
 
-function mimeFor(name: string): string {
-  const ext = name.toLowerCase().split('.').pop() ?? '';
-  const map: Record<string, string> = {
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    txt: 'text/plain',
-    md: 'text/markdown',
-    csv: 'text/csv',
-  };
-  return map[ext] ?? 'application/octet-stream';
-}
 
 /** Ordner anlegen. */
 nodesRouter.post('/folder', requireAuth, async (req: AuthRequest, res) => {

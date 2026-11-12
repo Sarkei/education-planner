@@ -8,6 +8,7 @@ import { pool } from './db';
 import { canWrite, fail, nodeAccess, requireAuth, type AuthRequest, type NodeRow } from './guards';
 import { absolute, relative as relativePath, safeName, TMP_ROOT, writeAtomic } from './storage';
 import { indexNode } from './indexer';
+import { mimeFor } from './templates';
 
 export const uploadsRouter = Router();
 
@@ -122,7 +123,7 @@ uploadsRouter.post('/:id/complete', requireAuth, async (req: AuthRequest, res) =
     `INSERT INTO nodes (id, parent_id, name, kind, storage_path, mime, size, owner_id, position)
      VALUES ($1,$2,$3,'file',$4,$5,$6,$7, coalesce((select max(position)+1 from nodes where parent_id is not distinct from $2), 0))
      RETURNING *`,
-    [nodeId, parentId, finalName, storagePath, mime || guessMime(finalName), stat.size, req.userId],
+    [nodeId, parentId, finalName, storagePath, mime || mimeFor(finalName), stat.size, req.userId],
   );
   await pool.query('DELETE FROM upload_sessions WHERE id = $1', [req.params.id]);
   void indexNode(nodeId).catch(() => undefined);
@@ -152,28 +153,6 @@ uploadsRouter.put('/text/:id', requireAuth, async (req: AuthRequest, res) => {
   res.json({ ok: true, size });
 });
 
-function guessMime(name: string): string {
-  const ext = path.extname(name).toLowerCase();
-  const map: Record<string, string> = {
-    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    '.doc': 'application/msword',
-    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    '.xls': 'application/vnd.ms-excel',
-    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    '.ppt': 'application/vnd.ms-powerpoint',
-    '.odt': 'application/vnd.oasis.opendocument.text',
-    '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
-    '.odp': 'application/vnd.oasis.opendocument.presentation',
-    '.pdf': 'application/pdf',
-    '.txt': 'text/plain',
-    '.md': 'text/markdown',
-    '.csv': 'text/csv',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-  };
-  return map[ext] ?? 'application/octet-stream';
-}
 
 async function uniqueName(parentId: string | null, desired: string): Promise<string> {
   const base = safeName(desired);
