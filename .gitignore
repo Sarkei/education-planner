@@ -1,61 +1,13 @@
-# Syncthing
-~syncthing~*
-
-# Temp files
-*.tmp
-*.Download
-
-# Optional
+node_modules/
+dist/
+server.js
+.env
 *.log
-
-# to exclude Obsidian's settings (including plugin and hotkey configurations)
-.obsidian/
-
-# to only exclude plugin configuration. Might be useful to prevent some plugin from exposing sensitive data
-.obsidian/plugins
-
-# OR only to exclude workspace cache
-.obsidian/workspace.json
-
-# to exclude workspace cache specific to mobile devices
-.obsidian/workspace-mobile.json
-
-# Add below lines to exclude OS settings and caches
-.trash/
 .DS_Store
-
-# to exclude Obsidian's settings (including plugin and hotkey configurations)
-
-# to only exclude plugin configuration. Might be useful to prevent some plugin from exposing sensitive data
-
-# OR only to exclude workspace cache
-
-# to exclude workspace cache specific to mobile devices
-
-# Add below lines to exclude OS settings and caches
-
-# System
 Thumbs.db
 desktop.ini
-
-# Editor / IDE
+*.tmp
+*.Download
+.trash/
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# Logs und Temp
-
-# .NET
-bin/
-obj/
-*.user
-*.suo
-.vs/
-TestResults/
-
-# Datenbanken und Dumps
-*.sqlite
-*.sqlite3
-*.db
-dumps/
