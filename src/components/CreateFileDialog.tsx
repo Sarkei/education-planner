@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, FileText, Loader2, NotebookPen } from 'lucide-react';
+import { Database, FileCode2, FileSpreadsheet, FileText, Loader2, NotebookPen, Presentation } from 'lucide-react';
 import { api } from '../lib/api';
 import { Modal } from './Modal';
 import type { NodeItem } from '../lib/types';
@@ -7,10 +7,13 @@ import type { NodeItem } from '../lib/types';
 type Kind = { ext: string; label: string; hint: string; icon: typeof FileText };
 
 const KINDS: Kind[] = [
-  { ext: 'docx', label: 'Word-Dokument', hint: '.docx · im Office-Editor bearbeiten', icon: FileText },
-  { ext: 'xlsx', label: 'Excel-Tabelle', hint: '.xlsx · im Office-Editor bearbeiten', icon: FileSpreadsheet },
-  { ext: 'md', label: 'Notiz', hint: '.md · direkt im Browser schreiben', icon: NotebookPen },
-  { ext: 'txt', label: 'Textdatei', hint: '.txt · direkt im Browser schreiben', icon: FileText },
+  { ext: 'docx', label: 'Word-Dokument', hint: '.docx · Textdokument im Editor', icon: FileText },
+  { ext: 'xlsx', label: 'Excel-Tabelle', hint: '.xlsx · Tabelle im Editor', icon: FileSpreadsheet },
+  { ext: 'pptx', label: 'Präsentation', hint: '.pptx · Folien im Editor', icon: Presentation },
+  { ext: 'md', label: 'Notiz', hint: '.md · direkt im Browser', icon: NotebookPen },
+  { ext: 'txt', label: 'Textdatei', hint: '.txt · direkt im Browser', icon: FileText },
+  { ext: 'csv', label: 'CSV-Tabelle', hint: '.csv · direkt im Browser', icon: Database },
+  { ext: 'html', label: 'HTML-Seite', hint: '.html · direkt im Browser', icon: FileCode2 },
 ];
 
 /** Neue leere Datei anlegen — der Typ bestimmt die Vorlage. */
@@ -48,7 +51,7 @@ export function CreateFileDialog({
   return (
     <Modal title="Neue Datei" subtitle={parentName} onClose={onClose}>
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid max-h-72 grid-cols-2 gap-2 overflow-auto">
           {KINDS.map((k) => {
             const Icon = k.icon;
             return (

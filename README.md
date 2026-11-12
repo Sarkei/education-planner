@@ -9,8 +9,12 @@ im Office-Editor. Alles liegt als echte Datei auf dem NAS, Änderungen werden au
   (Drag & Drop im Baum und in der Dateiliste), in den Papierkorb legen und wiederherstellen.
 - **Upload** vom Rechner per Knopfdruck oder Drag & Drop, in 8-MB-Teilen — dadurch gehen auch große
   Dateien durch den Cloudflare-Tunnel (100-MB-Grenze pro Request).
-- **Office-Editor**: `.docx/.doc/.odt/.rtf`, `.xlsx/.xls/.ods/.csv`, `.pptx/.ppt/.odp` öffnen in
-  ONLYOFFICE Docs; Textdateien (`.txt`, `.md`) direkt im Browser mit Strg+S.
+- **Office-Editor**: `.docx/.doc/.odt/.rtf/.txt`, `.xlsx/.xls/.ods/.csv`, `.pptx/.ppt/.odp` öffnen in
+  ONLYOFFICE Docs. Neue Dateien lassen sich anlegen: Word, Excel, **Präsentation**, Notiz, Text, CSV,
+  HTML — die Office-Formate mit gültiger Vorlage, damit der Editor sie direkt öffnet.
+- **Vorschau ohne Office**: PDF (Browser-Viewer), Bilder (png/jpg/gif/webp/svg/bmp/tiff/avif),
+  Audio (mp3/wav/ogg/m4a/flac/aac), Video (mp4/webm/mov/m4v/mkv); Text- und Code-Dateien (txt, md,
+  csv, json, xml, html, css, js, ts, yml, ini, sh, sql, tex, log …) im Editor mit Strg+S.
 - **Automatisches Speichern**: der Dokumentenserver meldet jede Änderung per Callback; der Server
   schreibt atomar, legt eine Version an (die letzten 20 bleiben) und erhöht die Versionsnummer. Ein
   Timer erzwingt alle 60 Sekunden ein Zwischenspeichern, damit ein Browser-Absturz nichts kostet.

@@ -4,7 +4,10 @@ import { execFile } from 'node:child_process';
 import JSZip from 'jszip';
 
 /** Dateien, die sich ohne Fremdwerkzeug lesen lassen. */
-const PLAIN = new Set(['.txt', '.md', '.csv', '.json', '.log', '.xml', '.html', '.htm', '.tex', '.yml', '.yaml']);
+const PLAIN = new Set([
+  '.txt', '.md', '.csv', '.json', '.log', '.xml', '.html', '.htm', '.tex', '.yml', '.yaml',
+  '.ini', '.cfg', '.conf', '.sh', '.bat', '.ps1', '.css', '.js', '.ts', '.sql', '.tsv', '.srt', '.vtt',
+]);
 /** Office-Formate sind ZIP-Container mit XML-Inhalt. */
 const ZIP_DOC = new Set(['.docx', '.docm', '.xlsx', '.xlsm', '.pptx', '.odt', '.ods', '.odp']);
 
@@ -95,6 +98,17 @@ export async function extractText(fullPath: string, name: string): Promise<strin
     }
     if (ZIP_DOC.has(ext)) return textFromZip(fullPath, ext);
     if (ext === '.pdf') return pdfToText(fullPath);
+    if (ext === '.rtf') {
+      // RTF grob lesbar machen: Steuerwörter und Gruppen entfernen
+      const raw = await fs.promises.readFile(fullPath, 'utf8');
+      return raw
+        .replace(/\\'([0-9a-f]{2})/gi, ' ')
+        .replace(/\\[a-z]+-?\d* ?/gi, ' ')
+        .replace(/[{}]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 600_000);
+    }
   } catch {
     return '';
   }
@@ -103,5 +117,5 @@ export async function extractText(fullPath: string, name: string): Promise<strin
 
 export function isSearchable(name: string): boolean {
   const ext = path.extname(name).toLowerCase();
-  return PLAIN.has(ext) || ZIP_DOC.has(ext) || ext === '.pdf';
+  return PLAIN.has(ext) || ZIP_DOC.has(ext) || ext === '.pdf' || ext === '.rtf';
 }

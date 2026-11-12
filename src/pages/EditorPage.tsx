@@ -12,8 +12,13 @@ declare global {
   }
 }
 
-const TEXT_EXT = ['txt', 'md', 'csv', 'json', 'log'];
-const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+const TEXT_EXT = [
+  'txt', 'md', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml',
+  'ini', 'cfg', 'conf', 'sh', 'bat', 'ps1', 'sql', 'log', 'tex', 'srt', 'vtt',
+];
+const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif', 'tif', 'tiff'];
+const AUDIO_EXT = ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'flac', 'aac'];
+const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'mkv'];
 
 export function EditorPage({ nodeId }: { nodeId: string }) {
   const [node, setNode] = useState<NodeItem | null>(null);
@@ -28,7 +33,10 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
   const ext = node?.name.split('.').pop()?.toLowerCase() ?? '';
   const isText = TEXT_EXT.includes(ext);
   const isImage = IMAGE_EXT.includes(ext);
+  const isAudio = AUDIO_EXT.includes(ext);
+  const isVideo = VIDEO_EXT.includes(ext);
   const isPdf = ext === 'pdf';
+  const isOffice = !isText && !isImage && !isAudio && !isVideo && !isPdf;
 
   useEffect(() => {
     let cancelled = false;
@@ -62,15 +70,15 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
   // Vorschau-Link für Bilder und PDFs (Token im Query, weil iframe/img keinen Header senden)
   useEffect(() => {
-    if (!node || (!isImage && !isPdf)) return;
+    if (!node || (!isImage && !isPdf && !isAudio && !isVideo)) return;
     void api<{ url: string }>(`/nodes/${node.id}/preview-token`, { method: 'POST', body: {} })
       .then((d) => setPreviewUrl(d.url))
       .catch(() => setPreviewUrl(null));
-  }, [node, isImage, isPdf]);
+  }, [node, isImage, isPdf, isAudio, isVideo]);
 
   // Office-Dokumente in ONLYOFFICE
   useEffect(() => {
-    if (!node || isText || isImage || isPdf) return;
+    if (!node || !isOffice) return;
     let disposed = false;
 
     async function boot() {
@@ -110,16 +118,16 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
       editorRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.id, isText, isImage, isPdf]);
+  }, [node?.id, isOffice]);
 
   // Alle 60 Sekunden zwischenspeichern
   useEffect(() => {
-    if (!node || isText || isImage || isPdf) return;
+    if (!node || !isOffice) return;
     const timer = window.setInterval(() => {
       void api(`/office/${node.id}/forcesave`, { method: 'POST', body: {} }).catch(() => undefined);
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [node, isText, isImage, isPdf]);
+  }, [node, isOffice]);
 
   async function saveText() {
     if (!node || text === null) return;
@@ -180,8 +188,10 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Speichern
               </button>
             </>
-          ) : (
+          ) : isOffice ? (
             <span>{saved ? 'alle Änderungen gesichert' : 'wird gespeichert …'}</span>
+          ) : (
+            <span>{isPdf ? 'PDF-Ansicht' : isImage ? 'Bild' : isAudio ? 'Audio' : isVideo ? 'Video' : 'Vorschau'}</span>
           )}
           <a
             className="btn btn-ghost !px-2 !py-1"
@@ -238,8 +248,29 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
             <Loader2 className="h-5 w-5 animate-spin text-muted" />
           </div>
         )
-      ) : (
+      ) : isAudio ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+          {previewUrl ? <audio src={previewUrl} controls className="w-full max-w-md" /> : <Loader2 className="h-5 w-5 animate-spin text-muted" />}
+          <p className="text-[12px] text-muted">{node.name}</p>
+        </div>
+      ) : isVideo ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-2">
+          {previewUrl ? (
+            <video src={previewUrl} controls className="max-h-full max-w-full rounded-lg" />
+          ) : (
+            <Loader2 className="h-5 w-5 animate-spin text-muted" />
+          )}
+        </div>
+      ) : isOffice ? (
         <div id={containerId.current} className="min-h-0 flex-1" />
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <ShieldAlert className="h-6 w-6 text-muted" />
+          <p className="text-sm font-medium">Für diesen Dateityp gibt es keine Vorschau</p>
+          <p className="max-w-sm text-[12px] text-muted">
+            {node.name} lässt sich herunterladen und auf dem Rechner öffnen.
+          </p>
+        </div>
       )}
     </div>
   );

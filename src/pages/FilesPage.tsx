@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Archive,
   ArrowLeft,
   ChevronRight,
   ClipboardPaste,
@@ -15,11 +16,13 @@ import {
   FolderPlus,
   Image as ImageIcon,
   Pencil,
+  Music,
   Presentation,
   Scissors,
   Share2,
   Trash2,
   Upload,
+  Video,
 } from 'lucide-react';
 import { api, getToken } from '../lib/api';
 import { navigate } from '../App';
@@ -39,7 +42,11 @@ function iconFor(node: NodeItem) {
   if (['docx', 'doc', 'odt', 'rtf', 'txt', 'md'].includes(ext)) return <FileText className="h-[18px] w-[18px] text-muted" />;
   if (['xlsx', 'xls', 'ods', 'csv'].includes(ext)) return <FileSpreadsheet className="h-[18px] w-[18px] text-muted" />;
   if (['pptx', 'ppt', 'odp'].includes(ext)) return <Presentation className="h-[18px] w-[18px] text-muted" />;
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return <ImageIcon className="h-[18px] w-[18px] text-muted" />;
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif', 'tif', 'tiff'].includes(ext))
+    return <ImageIcon className="h-[18px] w-[18px] text-muted" />;
+  if (['mp3', 'wav', 'ogg', 'oga', 'm4a', 'flac', 'aac'].includes(ext)) return <Music className="h-[18px] w-[18px] text-muted" />;
+  if (['mp4', 'webm', 'mov', 'm4v', 'mkv'].includes(ext)) return <Video className="h-[18px] w-[18px] text-muted" />;
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <Archive className="h-[18px] w-[18px] text-muted" />;
   return <FileIcon className="h-[18px] w-[18px] text-muted" />;
 }
 
