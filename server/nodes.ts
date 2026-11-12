@@ -401,6 +401,21 @@ nodesRouter.post('/:id/preview-token', requireAuth, async (req: AuthRequest, res
   res.json({ url: `/api/search/preview/${access.node.id}?t=${token}` });
 });
 
+/** Vorschau-Links für mehrere Dateien (Galerieansicht) — ein Aufruf statt N. */
+nodesRouter.post('/preview-tokens', requireAuth, async (req: AuthRequest, res) => {
+  const ids = Array.isArray((req.body as { ids?: unknown })?.ids) ? ((req.body as { ids: unknown[] }).ids as string[]) : [];
+  const urls: Record<string, string> = {};
+  for (const id of ids.slice(0, 200)) {
+    const access = await nodeAccess(id, req.userId!);
+    if (!access || access.node.kind !== 'file') continue;
+    const token = jwt.sign({ uid: req.userId, nid: access.node.id }, process.env.JWT_SECRET || 'dev-secret-change-me', {
+      expiresIn: '2h',
+    });
+    urls[access.node.id] = `/api/search/preview/${access.node.id}?t=${token}`;
+  }
+  res.json({ urls });
+});
+
 /** Alte Fassungen einer Datei. */
 nodesRouter.get('/:id/versions', requireAuth, async (req: AuthRequest, res) => {
   const access = await nodeAccess(req.params.id, req.userId!);

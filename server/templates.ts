@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { emptyPptx } from './pptx';
+import { emptyOdp, emptyOds, emptyOdt } from './odf';
 
 /** Minimal gültige Vorlagen, damit ONLYOFFICE neue Dateien direkt öffnen kann. */
 
@@ -55,6 +56,9 @@ export async function emptyFileFor(name: string): Promise<Buffer> {
   if (ext === 'docx') return emptyDocx();
   if (ext === 'xlsx') return emptyXlsx();
   if (ext === 'pptx') return emptyPptx();
+  if (ext === 'odt') return emptyOdt();
+  if (ext === 'ods') return emptyOds();
+  if (ext === 'odp') return emptyOdp();
   return Buffer.from('', 'utf8');
 }
 
