@@ -2,8 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChevronRight,
+  ClipboardPaste,
+  Copy,
+  CopyPlus,
   Download,
+  ExternalLink,
   File as FileIcon,
+  FilePlus,
   FileSpreadsheet,
   FileText,
   Folder,
@@ -11,6 +16,7 @@ import {
   Image as ImageIcon,
   Pencil,
   Presentation,
+  Scissors,
   Share2,
   Trash2,
   Upload,
@@ -21,6 +27,8 @@ import { Tree } from '../components/Tree';
 import { Modal } from '../components/Modal';
 import { ShareDialog } from '../components/ShareDialog';
 import { EmptyState, PageHead, Shell } from '../components/Shell';
+import { ContextMenu, type MenuEntry } from '../components/ContextMenu';
+import { CreateFileDialog } from '../components/CreateFileDialog';
 import type { NodeItem } from '../lib/types';
 
 const CHUNK = 8 * 1024 * 1024;
@@ -61,6 +69,9 @@ export function FilesPage() {
   const [uploads, setUploads] = useState<Array<{ name: string; percent: number }>>([]);
   const [dragging, setDragging] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; node: NodeItem | null } | null>(null);
+  const [clipboard, setClipboard] = useState<{ mode: 'copy' | 'cut'; node: NodeItem } | null>(null);
+  const [fileDialog, setFileDialog] = useState<{ parentId: string | null; parentName: string } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -78,6 +89,22 @@ export function FilesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Tastaturkürzel wie im Explorer
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (event.key === 'v' && clipboard) {
+        event.preventDefault();
+        void paste();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipboard, selectedFolder]);
 
   const children = useMemo(() => {
     const list = nodes.filter((n) => (n.parentId ?? null) === selectedFolder);
@@ -198,6 +225,79 @@ export function FilesPage() {
     URL.revokeObjectURL(url);
   }
 
+  /** Einfügen: kopieren legt eine Kopie an, ausschneiden verschiebt. */
+  async function paste() {
+    if (!clipboard) return;
+    const target = selectedFolder;
+    try {
+      if (clipboard.mode === 'copy') {
+        await api(`/nodes/${clipboard.node.id}/copy`, { body: { parentId: target } });
+      } else {
+        await api(`/nodes/${clipboard.node.id}`, { method: 'PATCH', body: { parentId: target } });
+      }
+      setClipboard(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Einfügen fehlgeschlagen.');
+    }
+  }
+
+  /** Rechtsklick-Menü passend zum Ziel (Knoten oder leerer Bereich). */
+  function menuEntries(node: NodeItem | null): MenuEntry[] {
+    const entries: MenuEntry[] = [];
+    entries.push({ kind: 'item', label: 'Neuer Ordner', icon: <FolderPlus className="h-3.5 w-3.5" />, onClick: () => setNewFolderOpen(true) });
+    entries.push({
+      kind: 'item',
+      label: 'Neue Datei',
+      icon: <FilePlus className="h-3.5 w-3.5" />,
+      onClick: () => setFileDialog({ parentId: node && node.kind === 'folder' ? node.id : null, parentName: node?.name ?? currentTitle }),
+    });
+    entries.push({ kind: 'separator' });
+    entries.push({
+      kind: 'item',
+      label: 'Einfügen',
+      icon: <ClipboardPaste className="h-3.5 w-3.5" />,
+      shortcut: 'Strg+V',
+      disabled: !clipboard,
+      onClick: () => void paste(),
+    });
+    if (!node) return entries;
+
+    entries.push({ kind: 'separator' });
+    entries.push({ kind: 'item', label: node.kind === 'folder' ? 'Öffnen' : 'Bearbeiten', icon: <ExternalLink className="h-3.5 w-3.5" />, onClick: () => open(node) });
+    entries.push({
+      kind: 'item',
+      label: 'Umbenennen',
+      icon: <Pencil className="h-3.5 w-3.5" />,
+      onClick: () => {
+        setRenaming(node);
+        setRenameValue(node.name);
+      },
+    });
+    entries.push({ kind: 'separator' });
+    entries.push({ kind: 'item', label: 'Kopieren', icon: <Copy className="h-3.5 w-3.5" />, shortcut: 'Strg+C', onClick: () => setClipboard({ mode: 'copy', node }) });
+    entries.push({ kind: 'item', label: 'Ausschneiden', icon: <Scissors className="h-3.5 w-3.5" />, shortcut: 'Strg+X', onClick: () => setClipboard({ mode: 'cut', node }) });
+    entries.push({
+      kind: 'item',
+      label: 'Duplizieren',
+      icon: <CopyPlus className="h-3.5 w-3.5" />,
+      onClick: async () => {
+        try {
+          await api(`/nodes/${node.id}/copy`, { body: { parentId: node.parentId ?? null } });
+          await load();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Duplizieren fehlgeschlagen.');
+        }
+      },
+    });
+    entries.push({ kind: 'separator' });
+    entries.push({ kind: 'item', label: 'Teilen', icon: <Share2 className="h-3.5 w-3.5" />, onClick: () => setShareNode(node) });
+    entries.push({ kind: 'item', label: 'Herunterladen', icon: <Download className="h-3.5 w-3.5" />, onClick: () => void download(node) });
+    entries.push({ kind: 'separator' });
+    entries.push({ kind: 'item', label: 'In den Papierkorb', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => void remove(node) });
+    return entries;
+  }
+
   const sharedRoots = nodes.filter((n) => n.shared);
   const currentTitle = breadcrumb.length ? breadcrumb[breadcrumb.length - 1].name : 'Alle Dateien';
 
@@ -205,14 +305,20 @@ export function FilesPage() {
     <Shell tab="files">
       <div className="flex h-full">
         <aside className="hidden w-72 shrink-0 flex-col border-r border-[var(--line)] p-3 md:flex">
-          <div className="mb-2 flex gap-1.5">
+          <div className="mb-1.5 flex gap-1.5">
             <button className="btn btn-primary flex-1 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
               <FolderPlus className="h-3.5 w-3.5" /> Ordner
             </button>
-            <button className="btn btn-ghost flex-1 !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
-              <Upload className="h-3.5 w-3.5" /> Hochladen
+            <button
+              className="btn btn-ghost flex-1 !py-1.5 text-xs"
+              onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
+            >
+              <FilePlus className="h-3.5 w-3.5" /> Datei
             </button>
           </div>
+          <button className="btn btn-ghost mb-2 w-full !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
+            <Upload className="h-3.5 w-3.5" /> Hochladen
+          </button>
           <div className="scroll-thin min-h-0 flex-1 overflow-auto">
             <p className="label mt-2">Meine Dateien</p>
             <Tree
@@ -222,6 +328,7 @@ export function FilesPage() {
               onDrop={(d, t) => void moveNode(d, t)}
               expanded={expanded}
               toggle={toggle}
+              onContextMenu={(node, x, y) => setMenu({ x, y, node })}
             />
             {sharedRoots.length > 0 && (
               <>
@@ -233,6 +340,7 @@ export function FilesPage() {
                   onDrop={(d, t) => void moveNode(d, t)}
                   expanded={expanded}
                   toggle={toggle}
+                  onContextMenu={(node, x, y) => setMenu({ x, y, node })}
                 />
               </>
             )}
@@ -265,6 +373,12 @@ export function FilesPage() {
                 <div className="flex gap-1.5">
                   <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
                     <FolderPlus className="h-3.5 w-3.5" /> Ordner
+                  </button>
+                  <button
+                    className="btn btn-ghost !py-1.5 text-xs md:hidden"
+                    onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
+                  >
+                    <FilePlus className="h-3.5 w-3.5" /> Datei
                   </button>
                   <button className="btn btn-primary !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
                     <Upload className="h-3.5 w-3.5" /> Hochladen
@@ -328,7 +442,14 @@ export function FilesPage() {
                 }
               />
             ) : (
-              <div className="space-y-1.5">
+              <div
+                className="space-y-1.5"
+                onContextMenu={(e) => {
+                  if ((e.target as HTMLElement).closest('.row-item')) return;
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, node: null });
+                }}
+              >
                 {children.map((node) => (
                   <div
                     key={node.id}
@@ -351,6 +472,10 @@ export function FilesPage() {
                       if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
                     }}
                     onClick={() => open(node)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setMenu({ x: e.clientX, y: e.clientY, node });
+                    }}
                   >
                     {iconFor(node)}
                     <div className="min-w-0 flex-1">
@@ -466,6 +591,20 @@ export function FilesPage() {
       )}
 
       {shareNode && <ShareDialog node={shareNode} onClose={() => setShareNode(null)} />}
+
+      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.node)} onClose={() => setMenu(null)} />}
+
+      {fileDialog && (
+        <CreateFileDialog
+          parentId={fileDialog.parentId}
+          parentName={fileDialog.parentName}
+          onClose={() => setFileDialog(null)}
+          onCreated={(node) => {
+            void load();
+            if (node.kind === 'file') navigate(`#/edit/${node.id}`);
+          }}
+        />
+      )}
     </Shell>
   );
 }
