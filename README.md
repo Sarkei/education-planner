@@ -17,6 +17,10 @@ im Office-Editor. Alles liegt als echte Datei auf dem NAS, Änderungen werden au
 - **Gemeinsames Arbeiten**: mehrere Nutzer im selben Dokument sehen sich live (Co-Editing von
   ONLYOFFICE), Freigaben pro Ordner oder Datei mit „ansehen" oder „bearbeiten", vererbt auf alles
   darunter.
+- **Volltextsuche** über Dateinamen und Inhalte von Word (docx), Excel (xlsx), PowerPoint (pptx),
+  OpenDocument, PDF und Textdateien. Der Text wird beim Hochladen und nach jedem Speichern im Editor
+  extrahiert und als `tsvector` (deutsche Wortstämme) indiziert; Treffer erscheinen mit Textausschnitt.
+- **Vorschau** für PDF (Browser-Viewer) und Bilder direkt in der App.
 - **Download** einzeln oder als ZIP für ganze Ordner.
 - Nutzerverwaltung (erster Account wird Administrator), Passwort ändern, Passwort-Reset-Link.
 

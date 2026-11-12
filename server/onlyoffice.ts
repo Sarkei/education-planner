@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { pool } from './db';
 import { canWrite, fail, loadNode, nodeAccess, requireAuth, type AuthRequest } from './guards';
 import { absolute, saveVersion, writeAtomic } from './storage';
+import { indexNode } from './indexer';
 
 export const officeRouter = Router();
 
@@ -159,6 +160,7 @@ officeRouter.post('/office/callback/:id', async (req, res) => {
           'UPDATE nodes SET size = $2, version = version + 1, updated_at = now() WHERE id = $1',
           [node.id, size],
         );
+        void indexNode(node.id).catch(() => undefined);
       }
     }
     res.json({ error: 0 });

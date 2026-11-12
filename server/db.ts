@@ -80,6 +80,15 @@ export async function initDb(): Promise<void> {
       created_at timestamptz not null default now()
     );
 
+    create table if not exists node_texts (
+      node_id uuid primary key references nodes(id) on delete cascade,
+      version integer not null default 0,
+      content text not null default '',
+      tsv tsvector,
+      updated_at timestamptz not null default now()
+    );
+    create index if not exists node_texts_tsv_idx on node_texts using gin(tsv);
+
     create table if not exists office_sessions (
       node_id uuid primary key references nodes(id) on delete cascade,
       doc_key text not null,

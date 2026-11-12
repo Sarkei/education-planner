@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { pool } from './db';
 import { canWrite, fail, nodeAccess, requireAuth, type AuthRequest, type NodeRow } from './guards';
 import { absolute, relative as relativePath, safeName, TMP_ROOT, writeAtomic } from './storage';
+import { indexNode } from './indexer';
 
 export const uploadsRouter = Router();
 
@@ -124,6 +125,7 @@ uploadsRouter.post('/:id/complete', requireAuth, async (req: AuthRequest, res) =
     [nodeId, parentId, finalName, storagePath, mime || guessMime(finalName), stat.size, req.userId],
   );
   await pool.query('DELETE FROM upload_sessions WHERE id = $1', [req.params.id]);
+  void indexNode(nodeId).catch(() => undefined);
   res.status(201).json({
     node: {
       id: rows[0].id,
@@ -146,6 +148,7 @@ uploadsRouter.put('/text/:id', requireAuth, async (req: AuthRequest, res) => {
   const content = String((req.body as { content?: string })?.content ?? '');
   const size = await writeAtomic(absolute(access.node.storage_path), Buffer.from(content, 'utf8'));
   await pool.query('UPDATE nodes SET size = $2, updated_at = now(), version = version + 1 WHERE id = $1', [req.params.id, size]);
+  void indexNode(req.params.id).catch(() => undefined);
   res.json({ ok: true, size });
 });
 
