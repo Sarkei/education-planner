@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import archiver from 'archiver';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { pool } from './db';
 import { canWrite, fail, loadNode, nodeAccess, requireAuth, type AuthRequest, type NodeRow } from './guards';
@@ -288,6 +289,19 @@ nodesRouter.get('/:id/download', requireAuth, async (req: AuthRequest, res) => {
   archive.pipe(res);
   archive.directory(full, node.name);
   await archive.finalize();
+});
+
+/** Kurzlebiger Link für die Vorschau (Bilder, PDFs) — ohne Authorization-Header nutzbar. */
+nodesRouter.post('/:id/preview-token', requireAuth, async (req: AuthRequest, res) => {
+  const access = await nodeAccess(req.params.id, req.userId!);
+  if (!access) {
+    fail(res, 404, 'not-found', 'Nicht gefunden.');
+    return;
+  }
+  const token = jwt.sign({ uid: req.userId, nid: access.node.id }, process.env.JWT_SECRET || 'dev-secret-change-me', {
+    expiresIn: '2h',
+  });
+  res.json({ url: `/api/search/preview/${access.node.id}?t=${token}` });
 });
 
 /** Alte Fassungen einer Datei. */

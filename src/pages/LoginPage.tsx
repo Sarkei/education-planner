@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { GraduationCap } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
@@ -37,55 +38,66 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-full items-center justify-center p-4">
-      <div className="card w-full max-w-sm p-6">
-        <h1 className="text-xl font-semibold">Education Planner</h1>
-        <p className="mt-1 mb-5 text-sm text-muted">
-          {needsSetup
-            ? 'Erster Start: Das erste Konto wird Administrator.'
-            : 'Deine Dokumente, Ordner und Freigaben an einem Ort.'}
-        </p>
-
-        <div className="mb-4 flex gap-1 rounded-xl border border-[var(--line)] p-1 text-sm font-semibold">
-          {(['login', 'register'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`flex-1 rounded-lg py-1.5 ${mode === m ? 'bg-[var(--accent-soft)]' : 'text-muted'}`}
-            >
-              {m === 'login' ? 'Anmelden' : 'Registrieren'}
-            </button>
-          ))}
+      <div className="w-full max-w-sm">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--accent-soft)]">
+            <GraduationCap className="h-5 w-5 text-[var(--accent)]" />
+          </div>
+          <div>
+            <p className="serif text-2xl leading-tight">Education Planner</p>
+            <p className="text-[12px] text-muted">Unterlagen für die Berufsschule</p>
+          </div>
         </div>
 
-        <form onSubmit={submit} className="space-y-3">
-          {mode === 'register' && (
+        <div className="card p-5">
+          <p className="mb-4 text-[13px] text-muted">
+            {needsSetup
+              ? 'Erster Start: Das erste Konto wird Administrator.'
+              : 'Melde dich an, um deine Ordner und Dokumente zu öffnen.'}
+          </p>
+
+          <div className="pill-nav mb-4 w-full">
+            {(['login', 'register'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`pill flex-1 justify-center ${mode === m ? 'active' : ''}`}
+                onClick={() => setMode(m)}
+              >
+                {m === 'login' ? 'Anmelden' : 'Registrieren'}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={submit} className="space-y-3">
+            {mode === 'register' && (
+              <div>
+                <label className="label">Name</label>
+                <input className="input" value={name} onChange={(e) => setName(e.target.value)} required minLength={2} />
+              </div>
+            )}
             <div>
-              <label className="label">Name</label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} required minLength={2} />
+              <label className="label">E-Mail</label>
+              <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-          )}
-          <div>
-            <label className="label">E-Mail</label>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div>
-            <label className="label">Passwort</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder="mindestens 8 Zeichen"
-            />
-          </div>
-          {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-600">{error}</p>}
-          <button className="btn btn-primary w-full" disabled={busy}>
-            {busy ? 'Einen Moment …' : mode === 'login' ? 'Anmelden' : 'Konto anlegen'}
-          </button>
-        </form>
+            <div>
+              <label className="label">Passwort</label>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder="mindestens 8 Zeichen"
+              />
+            </div>
+            {error && <p className="rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs font-medium text-[var(--danger)]">{error}</p>}
+            <button className="btn btn-primary w-full" disabled={busy}>
+              {busy ? 'Einen Moment …' : mode === 'login' ? 'Anmelden' : 'Konto anlegen'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
