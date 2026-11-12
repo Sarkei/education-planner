@@ -9,10 +9,11 @@ type Props = {
   onDrop: (dragId: string, targetId: string | null) => void;
   expanded: Set<string>;
   toggle: (id: string) => void;
+  onContextMenu?: (node: NodeItem | null, x: number, y: number) => void;
 };
 
 /** Ordnerbaum links. Ziehen legt Dateien und Ordner in andere Ordner. */
-export function Tree({ nodes, selectedId, onSelect, onDrop, expanded, toggle }: Props) {
+export function Tree({ nodes, selectedId, onSelect, onDrop, expanded, toggle, onContextMenu }: Props) {
   const byParent = new Map<string | null, NodeItem[]>();
   for (const node of nodes) {
     const key = node.parentId ?? null;
@@ -56,6 +57,12 @@ export function Tree({ nodes, selectedId, onSelect, onDrop, expanded, toggle }: 
               onSelect(node);
               if (node.kind === 'folder') toggle(node.id);
             }}
+            onContextMenu={(e) => {
+              if (!onContextMenu) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu(node, e.clientX, e.clientY);
+            }}
           >
             {node.kind === 'folder' ? (
               <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted transition ${isOpen ? 'rotate-90' : ''}`} />
@@ -91,6 +98,11 @@ export function Tree({ nodes, selectedId, onSelect, onDrop, expanded, toggle }: 
         setDropTarget(null);
         const dragId = e.dataTransfer.getData('text/plain');
         if (dragId) onDrop(dragId, null);
+      }}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        onContextMenu(null, e.clientX, e.clientY);
       }}
     >
       {roots.length === 0 ? (

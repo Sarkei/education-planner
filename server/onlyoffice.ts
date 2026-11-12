@@ -75,7 +75,8 @@ officeRouter.post('/nodes/:id/config', requireAuth, async (req: AuthRequest, res
     editorConfig: {
       lang: 'de',
       mode: editable ? 'edit' : 'view',
-      callbackUrl: `${PUBLIC_BASE}/api/office/callback/${node.id}?t=${callbackToken}`,
+      // Intern über das Docker-Netz: kein Cloudflare dazwischen (Bot-Schutz würde Callbacks blocken)
+      callbackUrl: `${INTERNAL_BASE}/api/office/callback/${node.id}?t=${callbackToken}`,
       user: { id: String(req.userId), name: req.userName || 'Nutzer' },
       customization: {
         autosave: true,

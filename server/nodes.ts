@@ -7,7 +7,9 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { pool } from './db';
 import { canWrite, fail, loadNode, nodeAccess, requireAuth, type AuthRequest, type NodeRow } from './guards';
-import { absolute, copyPath, ensureDirs, movePath, relative as relativePath, safeName, saveVersion, TRASH_ROOT } from './storage';
+import { absolute, copyPath, ensureDirs, movePath, relative as relativePath, safeName, saveVersion, TRASH_ROOT, writeAtomic } from './storage';
+import { emptyFileFor } from './templates';
+import { indexNode } from './indexer';
 
 export const nodesRouter = Router();
 
@@ -75,6 +77,113 @@ nodesRouter.get('/:id', requireAuth, async (req: AuthRequest, res) => {
   }
   res.json({ node: toDto(access.node, req.userId!) });
 });
+
+/** Neue leere Datei anlegen (Word, Excel oder Text). */
+nodesRouter.post('/file', requireAuth, async (req: AuthRequest, res) => {
+  const schema = z.object({
+    parentId: z.string().uuid().nullable().optional(),
+    name: z.string().min(1).max(180),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, 'invalid-input', parsed.error.issues[0].message);
+    return;
+  }
+  const parentId = parsed.data.parentId ?? null;
+  let parentPath: string | null = null;
+  if (parentId) {
+    const access = await nodeAccess(parentId, req.userId!);
+    if (!access || access.node.kind !== 'folder' || !canWrite(access)) {
+      fail(res, 403, 'forbidden', 'Keine Schreibrechte in diesem Ordner.');
+      return;
+    }
+    parentPath = access.node.storage_path;
+  }
+  const raw = parsed.data.name.includes('.') ? parsed.data.name : `${parsed.data.name}.docx`;
+  const name = await uniqueName(parentId, raw);
+  const storagePath = relativePath(parentPath, name);
+  const content = await emptyFileFor(name);
+  const size = await writeAtomic(absolute(storagePath), content);
+  const id = crypto.randomUUID();
+  const { rows } = await pool.query<NodeRow>(
+    `INSERT INTO nodes (id, parent_id, name, kind, storage_path, mime, size, owner_id, position)
+     VALUES ($1,$2,$3,'file',$4,$5,$6,$7, coalesce((select max(position)+1 from nodes where parent_id is not distinct from $2), 0))
+     RETURNING *`,
+    [id, parentId, name, storagePath, mimeFor(name), size, req.userId],
+  );
+  void indexNode(id).catch(() => undefined);
+  res.status(201).json({ node: toDto(rows[0], req.userId!) });
+});
+
+/** Kopie eines Knotens (Ordner samt Inhalt) anlegen. */
+nodesRouter.post('/:id/copy', requireAuth, async (req: AuthRequest, res) => {
+  const schema = z.object({ parentId: z.string().uuid().nullable().optional() });
+  const parsed = schema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    fail(res, 400, 'invalid-input', parsed.error.issues[0].message);
+    return;
+  }
+  const access = await nodeAccess(req.params.id, req.userId!);
+  if (!access) {
+    fail(res, 404, 'not-found', 'Nicht gefunden.');
+    return;
+  }
+  const targetParent = parsed.data.parentId === undefined ? access.node.parent_id : parsed.data.parentId;
+  let parentPath: string | null = null;
+  if (targetParent) {
+    const target = await nodeAccess(targetParent, req.userId!);
+    if (!target || target.node.kind !== 'folder' || !canWrite(target)) {
+      fail(res, 403, 'forbidden', 'Keine Schreibrechte im Zielordner.');
+      return;
+    }
+    parentPath = target.node.storage_path;
+  }
+  try {
+    const copyId = await copySubtree(access.node, targetParent, parentPath, req.userId!);
+    const created = await loadNode(copyId);
+    res.status(201).json({ node: created ? toDto(created, req.userId!) : null });
+  } catch (e) {
+    fail(res, 500, 'copy-failed', e instanceof Error ? e.message : 'Kopieren fehlgeschlagen.');
+  }
+});
+
+/** Kopiert einen Knoten rekursiv und liefert die neue ID zurück. */
+async function copySubtree(node: NodeRow, parentId: string | null, parentPath: string | null, userId: number): Promise<string> {
+  const name = await uniqueName(parentId, node.name);
+  const storagePath = relativePath(parentPath, name);
+  const id = crypto.randomUUID();
+  await copyPath(absolute(node.storage_path), absolute(storagePath));
+  await pool.query(
+    `INSERT INTO nodes (id, parent_id, name, kind, storage_path, mime, size, owner_id, position)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, coalesce((select max(position)+1 from nodes where parent_id is not distinct from $2), 0))`,
+    [id, parentId, name, node.kind, storagePath, node.mime, node.size, userId],
+  );
+  if (node.kind === 'folder') {
+    const { rows: kids } = await pool.query<NodeRow>(
+      'SELECT * FROM nodes WHERE parent_id = $1 AND trashed_at is null ORDER BY name',
+      [node.id],
+    );
+    for (const kid of kids) {
+      await copySubtree(kid, id, storagePath, userId);
+    }
+  } else {
+    void indexNode(id).catch(() => undefined);
+  }
+  return id;
+}
+
+function mimeFor(name: string): string {
+  const ext = name.toLowerCase().split('.').pop() ?? '';
+  const map: Record<string, string> = {
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    txt: 'text/plain',
+    md: 'text/markdown',
+    csv: 'text/csv',
+  };
+  return map[ext] ?? 'application/octet-stream';
+}
 
 /** Ordner anlegen. */
 nodesRouter.post('/folder', requireAuth, async (req: AuthRequest, res) => {
