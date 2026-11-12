@@ -1,15 +1,13 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import path from 'node:path';
 import { pool } from './db';
 import jwt from 'jsonwebtoken';
 import { fail, requireAuth, type AuthRequest, type NodeRow } from './guards';
 import { absolute } from './storage';
+import { indexPending } from './indexer';
 
 export const searchRouter = Router();
 
-const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.json', '.log']);
-const MAX_CONTENT_FILES = 400;
 
 /**
  * Suche über Dateinamen und Inhalte. Inhalte werden nur in Textdateien gelesen —
@@ -63,8 +61,16 @@ searchRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
     snippet: null,
   }));
 
-  // Inhaltssuche in allen sichtbaren Textdateien (nicht nur in den Namenstreffern)
-  const textFiles = await pool.query<NodeRow & { permission: string | null }>(
+  // Volltextsuche über den Index (Word, Excel, PowerPoint, ODF, PDF, Text)
+  const { rows: content } = await pool.query<{
+    id: string;
+    name: string;
+    parent_id: string | null;
+    mime: string | null;
+    size: string;
+    excerpt: string;
+    rank: number;
+  }>(
     `WITH RECURSIVE shared AS (
         SELECT n.*, s.permission FROM nodes n
           JOIN shares s ON s.node_id = n.id AND s.user_id = $1
@@ -78,42 +84,38 @@ searchRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
         UNION
         SELECT n.*, 'owner' FROM nodes n WHERE n.owner_id = $1 AND n.trashed_at IS NULL
       )
-      SELECT * FROM visible
-       WHERE kind = 'file'
-         AND lower(name) ~ '\.(txt|md|csv|json|log)$'
-       ORDER BY updated_at DESC LIMIT $2`,
-    [req.userId, MAX_CONTENT_FILES],
+      SELECT v.id, v.name, v.parent_id, v.mime, v.size::text AS size,
+             ts_headline('german', t.content, query, 'StartSel=«,StopSel=»,MaxWords=18,MinWords=6') AS excerpt,
+             ts_rank(t.tsv, query) AS rank
+        FROM visible v
+        JOIN node_texts t ON t.node_id = v.id
+       CROSS JOIN websearch_to_tsquery('german', $2) AS query
+       WHERE v.kind = 'file' AND t.tsv @@ query
+       ORDER BY rank DESC
+       LIMIT 30`,
+    [req.userId, q],
   );
-  const files = textFiles.rows;
-  const contentHits: Hit[] = [];
-  for (const file of files) {
-    if (!TEXT_EXTENSIONS.has(path.extname(file.name).toLowerCase())) continue;
-    try {
-      const full = absolute(file.storage_path);
-      const stat = await fs.promises.stat(full);
-      if (stat.size > 2 * 1024 * 1024) continue;
-      const text = await fs.promises.readFile(full, 'utf8');
-      const index = text.toLowerCase().indexOf(q.toLowerCase());
-      if (index >= 0) {
-        const start = Math.max(0, index - 40);
-        const snippet = text.slice(start, Math.min(text.length, index + q.length + 60)).replace(/\s+/g, ' ');
-        contentHits.push({
-          id: file.id,
-          name: file.name,
-          kind: 'file',
-          parentId: file.parent_id,
-          mime: file.mime,
-          size: Number(file.size),
-          match: 'content',
-          snippet: `…${snippet}…`,
-        });
-      }
-    } catch {
-      /* Datei nicht lesbar → ignorieren */
-    }
+  const indexedHits: Hit[] = content.map((row) => ({
+    id: row.id,
+    name: row.name,
+    kind: 'file',
+    parentId: row.parent_id,
+    mime: row.mime,
+    size: Number(row.size),
+    match: 'content',
+    snippet: row.excerpt.replace(/\s+/g, ' ').trim(),
+  }));
+
+  // Namenstreffer und Index-Treffer zusammenführen (eine Zeile pro Datei)
+  const seen = new Set(results.map((r) => r.id));
+  const merged = [...results];
+  for (const hit of indexedHits) {
+    if (seen.has(hit.id)) continue;
+    seen.add(hit.id);
+    merged.push(hit);
   }
 
-  res.json({ results: [...results, ...contentHits].slice(0, 60) });
+  res.json({ results: merged.slice(0, 60), pending: await indexPending() });
 });
 
 /**

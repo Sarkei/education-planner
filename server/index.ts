@@ -10,6 +10,7 @@ import { uploadsRouter } from './uploads';
 import { sharesRouter } from './shares';
 import { officeRouter } from './onlyoffice';
 import { searchRouter } from './search';
+import { startIndexer } from './indexer';
 import { ensureDirs } from './storage';
 
 process.on('unhandledRejection', (reason) => {
@@ -57,6 +58,7 @@ const port = Number(process.env.PORT || 3000);
 async function start(): Promise<void> {
   ensureDirs();
   await initDb();
+  startIndexer();
   app.listen(port, () => {
     console.log(`education-planner läuft auf :${port}`);
   });

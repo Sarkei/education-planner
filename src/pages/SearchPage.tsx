@@ -20,6 +20,7 @@ export function SearchPage() {
   const [hits, setHits] = useState<Hit[]>([]);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [pending, setPending] = useState(0);
   const timer = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -37,8 +38,9 @@ export function SearchPage() {
     timer.current = window.setTimeout(async () => {
       setBusy(true);
       try {
-        const data = await api<{ results: Hit[] }>(`/search?q=${encodeURIComponent(query.trim())}`);
+        const data = await api<{ results: Hit[]; pending?: number }>(`/search?q=${encodeURIComponent(query.trim())}`);
         setHits(data.results);
+        setPending(data.pending ?? 0);
         setSearched(true);
       } catch {
         setHits([]);
@@ -55,7 +57,7 @@ export function SearchPage() {
     <Shell tab="search">
       <div className="scroll-thin h-full overflow-auto p-4">
         <div className="mx-auto max-w-3xl">
-          <PageHead eyebrow="Finden" title="Suche" hint="Dateinamen und Inhalte von Textdateien — im eigenen Bestand und in Freigaben." />
+          <PageHead eyebrow="Finden" title="Suche" hint="Dateinamen und Volltext in Word, Excel, PowerPoint, PDF und Textdateien — im eigenen Bestand und in Freigaben." />
 
           <div className="relative mb-4">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted" />
@@ -68,6 +70,13 @@ export function SearchPage() {
             />
             {busy && <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted" />}
           </div>
+
+          {pending > 0 && (
+            <p className="mb-3 rounded-xl bg-[var(--accent-soft)] px-3 py-2 text-[12px] text-muted">
+              {pending} {pending === 1 ? 'Datei wird' : 'Dateien werden'} noch für die Volltextsuche aufbereitet — sie
+              erscheinen in den nächsten Minuten.
+            </p>
+          )}
 
           {query.trim().length < 2 ? (
             <p className="text-[13px] text-muted">Mindestens zwei Zeichen eingeben.</p>
