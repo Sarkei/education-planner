@@ -9,6 +9,7 @@ import { nodesRouter } from './nodes';
 import { uploadsRouter } from './uploads';
 import { sharesRouter } from './shares';
 import { officeRouter } from './onlyoffice';
+import { searchRouter } from './search';
 import { ensureDirs } from './storage';
 
 process.on('unhandledRejection', (reason) => {
@@ -37,6 +38,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/nodes', nodesRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/shares', sharesRouter);
+app.use('/api/search', searchRouter);
 app.use('/api', officeRouter);
 
 app.use('/api', (_req, res) => {

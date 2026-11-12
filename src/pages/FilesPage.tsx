@@ -1,41 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ChevronRight,
   Download,
   File as FileIcon,
-  Folder,
   FileSpreadsheet,
   FileText,
+  Folder,
   FolderPlus,
   Image as ImageIcon,
-  LogOut,
-  Moon,
   Pencil,
   Presentation,
   Share2,
-  Sun,
   Trash2,
   Upload,
-  Users,
 } from 'lucide-react';
 import { api, getToken } from '../lib/api';
-import { useAuth } from '../lib/auth';
 import { navigate } from '../App';
 import { Tree } from '../components/Tree';
 import { Modal } from '../components/Modal';
 import { ShareDialog } from '../components/ShareDialog';
+import { EmptyState, PageHead, Shell } from '../components/Shell';
 import type { NodeItem } from '../lib/types';
 
 const CHUNK = 8 * 1024 * 1024;
 
 function iconFor(node: NodeItem) {
-  if (node.kind === 'folder') return <Folder className="h-5 w-5 text-[var(--accent)]" />;
+  if (node.kind === 'folder') return <Folder className="h-[18px] w-[18px] text-[var(--accent)]" />;
   const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-  if (['docx', 'doc', 'odt', 'rtf', 'txt', 'md'].includes(ext)) return <FileText className="h-5 w-5" />;
-  if (['xlsx', 'xls', 'ods', 'csv'].includes(ext)) return <FileSpreadsheet className="h-5 w-5" />;
-  if (['pptx', 'ppt', 'odp'].includes(ext)) return <Presentation className="h-5 w-5" />;
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return <ImageIcon className="h-5 w-5" />;
-  return <FileIcon className="h-5 w-5" />;
+  if (['docx', 'doc', 'odt', 'rtf', 'txt', 'md'].includes(ext)) return <FileText className="h-[18px] w-[18px] text-muted" />;
+  if (['xlsx', 'xls', 'ods', 'csv'].includes(ext)) return <FileSpreadsheet className="h-[18px] w-[18px] text-muted" />;
+  if (['pptx', 'ppt', 'odp'].includes(ext)) return <Presentation className="h-[18px] w-[18px] text-muted" />;
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return <ImageIcon className="h-[18px] w-[18px] text-muted" />;
+  return <FileIcon className="h-[18px] w-[18px] text-muted" />;
 }
 
 function formatSize(bytes: number): string {
@@ -51,7 +48,6 @@ function formatSize(bytes: number): string {
 }
 
 export function FilesPage() {
-  const { user, logout } = useAuth();
   const [nodes, setNodes] = useState<NodeItem[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -64,13 +60,8 @@ export function FilesPage() {
   const [renameValue, setRenameValue] = useState('');
   const [uploads, setUploads] = useState<Array<{ name: string; percent: number }>>([]);
   const [dragging, setDragging] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('eduplanner.theme') as 'light' | 'dark') || 'light');
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('eduplanner.theme', theme);
-  }, [theme]);
 
   const load = useCallback(async () => {
     try {
@@ -123,7 +114,7 @@ export function FilesPage() {
 
   async function createFolder() {
     const name = folderName.trim();
-    if (name.length < 1) return;
+    if (!name) return;
     try {
       await api('/nodes/folder', { body: { parentId: selectedFolder, name } });
       setNewFolderOpen(false);
@@ -166,8 +157,7 @@ export function FilesPage() {
 
   /** Upload in Teilen — so passen auch große Dateien durch den Tunnel. */
   async function uploadFiles(files: FileList | File[]) {
-    const list = Array.from(files);
-    for (const file of list) {
+    for (const file of Array.from(files)) {
       setUploads((prev) => [...prev, { name: file.name, percent: 0 }]);
       try {
         const init = await api<{ uploadId: string }>('/uploads/init', {
@@ -209,33 +199,11 @@ export function FilesPage() {
   }
 
   const sharedRoots = nodes.filter((n) => n.shared);
+  const currentTitle = breadcrumb.length ? breadcrumb[breadcrumb.length - 1].name : 'Alle Dateien';
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className="text-base font-semibold">Education Planner</span>
-          <span className="hidden text-xs text-muted sm:inline">{user?.name}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Design wechseln">
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-          {user?.role === 'admin' && (
-            <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => navigate('#/users')} title="Nutzer">
-              <Users className="h-4 w-4" />
-            </button>
-          )}
-          <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => navigate('#/trash')} title="Papierkorb">
-            <Trash2 className="h-4 w-4" />
-          </button>
-          <button className="btn btn-ghost !px-2 !py-1.5" onClick={logout} title="Abmelden">
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
+    <Shell tab="files">
+      <div className="flex h-full">
         <aside className="hidden w-72 shrink-0 flex-col border-r border-[var(--line)] p-3 md:flex">
           <div className="mb-2 flex gap-1.5">
             <button className="btn btn-primary flex-1 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
@@ -245,20 +213,34 @@ export function FilesPage() {
               <Upload className="h-3.5 w-3.5" /> Hochladen
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="scroll-thin min-h-0 flex-1 overflow-auto">
             <p className="label mt-2">Meine Dateien</p>
-            <Tree nodes={nodes.filter((n) => !n.shared)} selectedId={selectedFolder} onSelect={(n) => setSelectedFolder(n.id)} onDrop={(d, t) => void moveNode(d, t)} expanded={expanded} toggle={toggle} />
+            <Tree
+              nodes={nodes.filter((n) => !n.shared)}
+              selectedId={selectedFolder}
+              onSelect={(n) => setSelectedFolder(n.id)}
+              onDrop={(d, t) => void moveNode(d, t)}
+              expanded={expanded}
+              toggle={toggle}
+            />
             {sharedRoots.length > 0 && (
               <>
                 <p className="label mt-4">Mit mir geteilt</p>
-                <Tree nodes={sharedRoots} selectedId={selectedFolder} onSelect={(n) => setSelectedFolder(n.id)} onDrop={(d, t) => void moveNode(d, t)} expanded={expanded} toggle={toggle} />
+                <Tree
+                  nodes={sharedRoots}
+                  selectedId={selectedFolder}
+                  onSelect={(n) => setSelectedFolder(n.id)}
+                  onDrop={(d, t) => void moveNode(d, t)}
+                  expanded={expanded}
+                  toggle={toggle}
+                />
               </>
             )}
           </div>
         </aside>
 
         <main
-          className={`min-w-0 flex-1 overflow-auto p-4 ${dragging ? 'bg-[var(--accent-soft)]' : ''}`}
+          className={`scroll-thin min-w-0 flex-1 overflow-auto p-4 ${dragging ? 'bg-[var(--accent-soft)]' : ''}`}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) {
               e.preventDefault();
@@ -274,102 +256,160 @@ export function FilesPage() {
             }
           }}
         >
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button className="btn btn-ghost !px-2 !py-1" onClick={() => setSelectedFolder(breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].id : null)} disabled={!selectedFolder}>
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="flex flex-wrap items-center gap-1 text-sm">
-              <button className={selectedFolder ? 'text-muted' : 'font-semibold'} onClick={() => setSelectedFolder(null)}>
-                Meine Dateien
+          <div className="mx-auto max-w-6xl">
+            <PageHead
+              eyebrow="Sammlung"
+              title={currentTitle}
+              hint={`${children.length} ${children.length === 1 ? 'Eintrag' : 'Einträge'} · Dateien liegen als echte Dateien auf dem NAS`}
+              action={
+                <div className="flex gap-1.5">
+                  <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
+                    <FolderPlus className="h-3.5 w-3.5" /> Ordner
+                  </button>
+                  <button className="btn btn-primary !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
+                    <Upload className="h-3.5 w-3.5" /> Hochladen
+                  </button>
+                </div>
+              }
+            />
+
+            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px]">
+              <button
+                className="btn btn-ghost !px-2 !py-1"
+                onClick={() => setSelectedFolder(breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].id : null)}
+                disabled={!selectedFolder}
+                title="Eine Ebene zurück"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </button>
+              <button className={selectedFolder ? 'text-muted hover:underline' : 'font-semibold'} onClick={() => setSelectedFolder(null)}>
+                Alle Dateien
               </button>
               {breadcrumb.map((item) => (
                 <span key={item.id} className="flex items-center gap-1">
-                  <span className="text-muted">/</span>
+                  <ChevronRight className="h-3 w-3 text-muted" />
                   <button onClick={() => setSelectedFolder(item.id)} className="hover:underline">
                     {item.name}
                   </button>
                 </span>
               ))}
             </div>
-            <div className="ml-auto flex gap-1.5">
-              <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
-                <FolderPlus className="h-3.5 w-3.5" /> Ordner
-              </button>
-              <button className="btn btn-primary !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
-                <Upload className="h-3.5 w-3.5" /> Hochladen
-              </button>
-            </div>
-          </div>
 
-          {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-600">{error}</p>}
+            {error && (
+              <p className="mb-3 rounded-xl bg-[var(--danger)]/10 px-3 py-2 text-xs font-medium text-[var(--danger)]">{error}</p>
+            )}
 
-          {uploads.length > 0 && (
-            <div className="mb-3 space-y-2">
-              {uploads.map((u) => (
-                <div key={u.name} className="card p-3">
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="truncate">{u.name}</span>
-                    <span className="text-muted">{u.percent}%</span>
+            {uploads.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {uploads.map((u) => (
+                  <div key={u.name} className="card p-3">
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="truncate">{u.name}</span>
+                      <span className="text-muted">{u.percent}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
+                      <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${u.percent}%` }} />
+                    </div>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
-                    <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${u.percent}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {loading ? (
-            <p className="text-sm text-muted">Lädt …</p>
-          ) : children.length === 0 ? (
-            <div className="card flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-              <FolderPlus className="h-8 w-8 text-muted" />
-              <p className="text-sm font-medium">Dieser Ordner ist leer</p>
-              <p className="max-w-sm text-xs text-muted">
-                Zieh Dateien aus dem Explorer hierher oder nutze „Hochladen“. Ordner legst du mit „Ordner“ an.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {children.map((node) => (
-                <div
-                  key={node.id}
-                  className="card group flex items-center gap-3 p-3 hover:border-[var(--accent)]"
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', node.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDoubleClick={() => open(node)}
-                >
-                  <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => open(node)}>
-                    {iconFor(node)}
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{node.name}</span>
-                      <span className="block text-[11px] text-muted">
-                        {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
-                        {node.shared ? ' · geteilt' : ''}
-                      </span>
-                    </span>
+            {loading ? (
+              <p className="text-sm text-muted">Lädt …</p>
+            ) : children.length === 0 ? (
+              <EmptyState
+                title="Hier ist noch nichts"
+                hint="Zieh Dateien aus dem Explorer in dieses Fenster oder nutze „Hochladen“. Ordner legst du mit „Ordner“ an."
+                action={
+                  <button className="btn btn-ghost mt-2" onClick={() => setNewFolderOpen(true)}>
+                    <FolderPlus className="h-4 w-4" /> Ersten Ordner anlegen
                   </button>
-                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                    <button className="btn btn-ghost !px-1.5 !py-1" title="Umbenennen" onClick={() => { setRenaming(node); setRenameValue(node.name); }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button className="btn btn-ghost !px-1.5 !py-1" title="Teilen" onClick={() => setShareNode(node)}>
-                      <Share2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button className="btn btn-ghost !px-1.5 !py-1" title="Herunterladen" onClick={() => void download(node)}>
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
-                    <button className="btn btn-ghost !px-1.5 !py-1" title="In den Papierkorb" onClick={() => void remove(node)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                }
+              />
+            ) : (
+              <div className="space-y-1.5">
+                {children.map((node) => (
+                  <div
+                    key={node.id}
+                    className={`row-item group ${dropTarget === node.id ? 'drop-target' : ''}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', node.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      if (node.kind !== 'folder') return;
+                      e.preventDefault();
+                      setDropTarget(node.id);
+                    }}
+                    onDragLeave={() => setDropTarget((c) => (c === node.id ? null : c))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDropTarget(null);
+                      const dragId = e.dataTransfer.getData('text/plain');
+                      if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
+                    }}
+                    onClick={() => open(node)}
+                  >
+                    {iconFor(node)}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13.5px] font-medium" title={node.name}>
+                        {node.name}
+                      </p>
+                      <p className="text-[11px] text-muted">
+                        {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
+                        {node.permission !== 'owner' ? ` · ${node.permission === 'edit' ? 'bearbeitbar' : 'nur ansehen'}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                      <button
+                        className="btn btn-ghost !px-1.5 !py-1"
+                        title="Umbenennen"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRenaming(node);
+                          setRenameValue(node.name);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className="btn btn-ghost !px-1.5 !py-1"
+                        title="Teilen"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareNode(node);
+                        }}
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className="btn btn-ghost !px-1.5 !py-1"
+                        title="Herunterladen"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void download(node);
+                        }}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className="btn btn-ghost !px-1.5 !py-1 text-[var(--danger)]"
+                        title="In den Papierkorb"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void remove(node);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </main>
       </div>
 
@@ -385,11 +425,18 @@ export function FilesPage() {
       />
 
       {newFolderOpen && (
-        <Modal title="Neuer Ordner" onClose={() => setNewFolderOpen(false)}>
+        <Modal title="Neuer Ordner" subtitle={currentTitle} onClose={() => setNewFolderOpen(false)}>
           <div className="space-y-3">
             <div>
               <label className="label">Name</label>
-              <input className="input" autoFocus value={folderName} onChange={(e) => setFolderName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void createFolder()} />
+              <input
+                className="input"
+                autoFocus
+                value={folderName}
+                onChange={(e) => setFolderName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void createFolder()}
+                placeholder="z. B. IT11b oder LF4 Netzwerke"
+              />
             </div>
             <button className="btn btn-primary w-full" onClick={() => void createFolder()} disabled={!folderName.trim()}>
               Anlegen
@@ -403,7 +450,13 @@ export function FilesPage() {
           <div className="space-y-3">
             <div>
               <label className="label">Neuer Name</label>
-              <input className="input" autoFocus value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void rename()} />
+              <input
+                className="input"
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void rename()}
+              />
             </div>
             <button className="btn btn-primary w-full" onClick={() => void rename()} disabled={!renameValue.trim()}>
               Speichern
@@ -413,6 +466,6 @@ export function FilesPage() {
       )}
 
       {shareNode && <ShareDialog node={shareNode} onClose={() => setShareNode(null)} />}
-    </div>
+    </Shell>
   );
 }

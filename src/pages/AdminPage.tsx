@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Trash2, UserPlus } from 'lucide-react';
+import { Loader2, Trash2, UserPlus } from 'lucide-react';
 import { api } from '../lib/api';
-import { navigate } from '../App';
 import { useAuth } from '../lib/auth';
+import { PageHead, Shell } from '../components/Shell';
 
 type UserRow = { id: number; email: string; name: string; role: string; created_at: string };
 
@@ -15,6 +15,7 @@ export function AdminPage() {
   const [role, setRole] = useState<'user' | 'admin'>('user');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -30,7 +31,9 @@ export function AdminPage() {
   }, [load]);
 
   async function create() {
+    setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       await api('/auth/users', { body: { name: name.trim(), email: email.trim(), password, role } });
       setNotice(`Konto für ${name.trim()} angelegt.`);
@@ -40,6 +43,8 @@ export function AdminPage() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Konto konnte nicht angelegt werden.');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -50,65 +55,75 @@ export function AdminPage() {
   }
 
   if (user?.role !== 'admin') {
-    return <p className="p-6 text-sm text-muted">Nur für Administratoren.</p>;
+    return (
+      <Shell tab="users">
+        <p className="p-6 text-sm text-muted">Nur für Administratoren.</p>
+      </Shell>
+    );
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-2.5">
-        <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => navigate('#/files')}>
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <span className="text-sm font-semibold">Nutzer</span>
-      </header>
-      <div className="grid flex-1 gap-4 overflow-auto p-4 lg:grid-cols-[1fr_360px] lg:items-start">
-        <div className="space-y-2">
-          {users.map((u) => (
-            <div key={u.id} className="card flex items-center gap-3 p-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{u.name}</p>
-                <p className="truncate text-[11px] text-muted">
-                  {u.email} · {u.role === 'admin' ? 'Administrator' : 'Nutzer'}
-                </p>
-              </div>
-              {u.id !== user?.id && (
-                <button className="btn btn-ghost !py-1 text-xs text-red-600" onClick={() => void remove(u.id)}>
-                  <Trash2 className="h-3.5 w-3.5" /> Löschen
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+    <Shell tab="users">
+      <div className="scroll-thin h-full overflow-auto p-4">
+        <div className="mx-auto max-w-5xl">
+          <PageHead eyebrow="Zugänge" title="Nutzer" hint="Jeder bekommt ein eigenes Konto und sieht nur eigene Dateien plus Freigaben." />
 
-        <div className="card space-y-3 p-4">
-          <p className="label !mb-0">Neues Konto</p>
-          <div>
-            <label className="label">Name</label>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="grid gap-4 lg:grid-cols-[1fr_360px] lg:items-start">
+            <div className="space-y-1.5">
+              {users.map((u) => (
+                <div key={u.id} className="row-item">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent)]">
+                    {u.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-medium">{u.name}</p>
+                    <p className="truncate text-[11px] text-muted">{u.email}</p>
+                  </div>
+                  <span className="badge">{u.role === 'admin' ? 'Administrator' : 'Nutzer'}</span>
+                  {u.id !== user?.id && (
+                    <button className="btn btn-ghost !py-1 text-xs text-[var(--danger)]" onClick={() => void remove(u.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="card space-y-3 p-4">
+              <p className="label !mb-0">Neues Konto</p>
+              <div>
+                <label className="label">Name</label>
+                <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">E-Mail</label>
+                <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Startpasswort</label>
+                <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mindestens 8 Zeichen" />
+              </div>
+              <div>
+                <label className="label">Rolle</label>
+                <select className="input" value={role} onChange={(e) => setRole(e.target.value as 'user' | 'admin')}>
+                  <option value="user">Nutzer</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              {error && <p className="rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs text-[var(--danger)]">{error}</p>}
+              {notice && <p className="rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">{notice}</p>}
+              <button
+                className="btn btn-primary w-full"
+                onClick={() => void create()}
+                disabled={busy || !name.trim() || !email.trim() || password.length < 8}
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Konto anlegen
+              </button>
+              <p className="text-[11px] text-muted">Das Startpasswort gibst du selbst weiter; jeder kann es später ändern.</p>
+            </div>
           </div>
-          <div>
-            <label className="label">E-Mail</label>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Startpasswort</label>
-            <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mindestens 8 Zeichen" />
-          </div>
-          <div>
-            <label className="label">Rolle</label>
-            <select className="input" value={role} onChange={(e) => setRole(e.target.value as 'user' | 'admin')}>
-              <option value="user">Nutzer</option>
-              <option value="admin">Administrator</option>
-            </select>
-          </div>
-          {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-600">{error}</p>}
-          {notice && <p className="rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">{notice}</p>}
-          <button className="btn btn-primary w-full" onClick={() => void create()} disabled={!name.trim() || !email.trim() || password.length < 8}>
-            <UserPlus className="h-4 w-4" /> Konto anlegen
-          </button>
-          <p className="text-[11px] text-muted">Das Startpasswort gibst du selbst weiter; jeder kann es später ändern.</p>
         </div>
       </div>
-    </div>
+    </Shell>
   );
 }

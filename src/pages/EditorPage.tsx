@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, Loader2, Save } from 'lucide-react';
-import { api } from '../lib/api';
+import { ArrowLeft, Check, Download, Loader2, Save, ShieldAlert } from 'lucide-react';
+import { api, getToken } from '../lib/api';
 import { navigate } from '../App';
 import type { NodeItem } from '../lib/types';
 
-type OfficeConfig = {
-  documentServerUrl: string;
-  config: Record<string, unknown>;
-};
+type OfficeConfig = { documentServerUrl: string; config: Record<string, unknown> };
 
 declare global {
   interface Window {
@@ -15,29 +12,32 @@ declare global {
   }
 }
 
-const TEXT_EXTENSIONS = ['txt', 'md'];
+const TEXT_EXT = ['txt', 'md', 'csv', 'json', 'log'];
+const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
 
 export function EditorPage({ nodeId }: { nodeId: string }) {
   const [node, setNode] = useState<NodeItem | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(true);
   const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
-  const containerRef = useRef<string>(`office-${Math.random().toString(36).slice(2)}`);
+  const containerId = useRef(`office-${Math.random().toString(36).slice(2)}`);
 
   const ext = node?.name.split('.').pop()?.toLowerCase() ?? '';
-  const isText = TEXT_EXTENSIONS.includes(ext) && !node?.mime?.includes('officedocument');
+  const isText = TEXT_EXT.includes(ext);
+  const isImage = IMAGE_EXT.includes(ext);
+  const isPdf = ext === 'pdf';
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const data = await api<{ node: NodeItem }>(`/nodes/${nodeId}`);
-        if (cancelled) return;
-        setNode(data.node);
+        if (!cancelled) setNode(data.node);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Datei nicht gefunden.');
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Datei nicht gefunden.');
       }
     })();
     return () => {
@@ -45,13 +45,13 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
     };
   }, [nodeId]);
 
-  // Textdateien direkt im Browser bearbeiten
+  // Textdateien direkt im Browser
   useEffect(() => {
     if (!node || !isText) return;
     void (async () => {
       try {
-        const res = await fetch(`/api/nodes/${node.id}/download`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('eduplanner.token') ?? ''}` },
+        const res = await fetch(`/api/search/preview/${node.id}`, {
+          headers: { Authorization: `Bearer ${getToken() ?? ''}` },
         });
         setText(await res.text());
       } catch {
@@ -60,9 +60,17 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
     })();
   }, [node, isText]);
 
-  // Office-Dokument in ONLYOFFICE öffnen
+  // Vorschau-Link für Bilder und PDFs (Token im Query, weil iframe/img keinen Header senden)
   useEffect(() => {
-    if (!node || isText) return;
+    if (!node || (!isImage && !isPdf)) return;
+    void api<{ url: string }>(`/nodes/${node.id}/preview-token`, { method: 'POST', body: {} })
+      .then((d) => setPreviewUrl(d.url))
+      .catch(() => setPreviewUrl(null));
+  }, [node, isImage, isPdf]);
+
+  // Office-Dokumente in ONLYOFFICE
+  useEffect(() => {
+    if (!node || isText || isImage || isPdf) return;
     let disposed = false;
 
     async function boot() {
@@ -88,7 +96,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
             onRequestClose: () => navigate('#/files'),
           },
         };
-        editorRef.current = new window.DocsAPI.DocEditor(containerRef.current, config);
+        editorRef.current = new window.DocsAPI.DocEditor(containerId.current, config);
         setSaved(true);
       } catch (e) {
         if (!disposed) setError(e instanceof Error ? e.message : 'Editor konnte nicht starten.');
@@ -102,16 +110,16 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
       editorRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.id, isText]);
+  }, [node?.id, isText, isImage, isPdf]);
 
-  // Alle 60 Sekunden zwischenspeichern, damit bei Absturz nichts verloren geht
+  // Alle 60 Sekunden zwischenspeichern
   useEffect(() => {
-    if (!node || isText) return;
+    if (!node || isText || isImage || isPdf) return;
     const timer = window.setInterval(() => {
       void api(`/office/${node.id}/forcesave`, { method: 'POST', body: {} }).catch(() => undefined);
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [node, isText]);
+  }, [node, isText, isImage, isPdf]);
 
   async function saveText() {
     if (!node || text === null) return;
@@ -119,7 +127,6 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
     try {
       await api(`/uploads/text/${node.id}`, { method: 'PUT', body: { content: text } });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.');
     } finally {
@@ -130,7 +137,8 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="text-sm font-medium text-red-600">{error}</p>
+        <ShieldAlert className="h-6 w-6 text-[var(--danger)]" />
+        <p className="text-sm font-medium text-[var(--danger)]">{error}</p>
         <button className="btn btn-ghost" onClick={() => navigate('#/files')}>
           <ArrowLeft className="h-4 w-4" /> Zurück zu den Dateien
         </button>
@@ -146,14 +154,21 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
     );
   }
 
+  const canEdit = node.permission !== 'view';
+
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-2">
+      <header className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-2.5">
         <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => navigate('#/files')} title="Zurück">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <span className="truncate text-sm font-semibold">{node.name}</span>
-        <span className="ml-auto flex items-center gap-2 text-[11px] text-muted">
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-semibold">{node.name}</p>
+          <p className="text-[11px] text-muted">
+            {canEdit ? 'bearbeitbar' : 'nur ansehen'} · Version {node.version}
+          </p>
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted">
           {isText ? (
             <>
               {saved && (
@@ -161,20 +176,41 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
                   <Check className="h-3 w-3" /> gespeichert
                 </span>
               )}
-              <button className="btn btn-primary !py-1 text-xs" onClick={() => void saveText()} disabled={busy}>
+              <button className="btn btn-primary !py-1 text-xs" onClick={() => void saveText()} disabled={busy || !canEdit}>
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Speichern
               </button>
             </>
           ) : (
             <span>{saved ? 'alle Änderungen gesichert' : 'wird gespeichert …'}</span>
           )}
-        </span>
+          <a
+            className="btn btn-ghost !px-2 !py-1"
+            href={`/api/nodes/${node.id}/download`}
+            onClick={async (e) => {
+              e.preventDefault();
+              const res = await fetch(`/api/nodes/${node.id}/download`, {
+                headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+              });
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = node.name;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            title="Herunterladen"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </a>
+        </div>
       </header>
 
       {isText ? (
         <textarea
-          className="min-h-0 flex-1 resize-none border-0 bg-[var(--surface)] p-6 font-mono text-sm outline-none"
+          className="scroll-thin min-h-0 flex-1 resize-none border-0 bg-[var(--bg)] p-6 font-mono text-[13px] leading-relaxed outline-none"
           value={text ?? ''}
+          readOnly={!canEdit}
           onChange={(e) => {
             setText(e.target.value);
             setSaved(false);
@@ -186,8 +222,24 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
             }
           }}
         />
+      ) : isImage ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[var(--bg-soft)] p-6">
+          {previewUrl ? (
+            <img src={previewUrl} alt={node.name} className="max-h-full max-w-full rounded-xl" />
+          ) : (
+            <Loader2 className="h-5 w-5 animate-spin text-muted" />
+          )}
+        </div>
+      ) : isPdf ? (
+        previewUrl ? (
+          <iframe src={previewUrl} title={node.name} className="min-h-0 flex-1 border-0 bg-[var(--bg-soft)]" />
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-muted" />
+          </div>
+        )
       ) : (
-        <div id={containerRef.current} className="min-h-0 flex-1" />
+        <div id={containerId.current} className="min-h-0 flex-1" />
       )}
     </div>
   );

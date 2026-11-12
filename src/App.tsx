@@ -5,6 +5,7 @@ import { FilesPage } from './pages/FilesPage';
 import { EditorPage } from './pages/EditorPage';
 import { AdminPage } from './pages/AdminPage';
 import { TrashPage } from './pages/TrashPage';
+import { SearchPage } from './pages/SearchPage';
 
 function useHashRoute(): string {
   const [route, setRoute] = useState(() => location.hash || '#/files');
@@ -25,15 +26,19 @@ function Router() {
   }
   if (!user) return <LoginPage />;
 
-  if (route.startsWith('#/edit/')) {
-    return <EditorPage nodeId={route.replace('#/edit/', '')} />;
-  }
+  if (route.startsWith('#/edit/')) return <EditorPage nodeId={route.replace('#/edit/', '')} />;
+  if (route.startsWith('#/search')) return <SearchPage />;
   if (route.startsWith('#/trash')) return <TrashPage />;
   if (route.startsWith('#/users')) return <AdminPage />;
   return <FilesPage />;
 }
 
 export function App() {
+  useEffect(() => {
+    const stored = localStorage.getItem('eduplanner.theme');
+    document.documentElement.setAttribute('data-theme', stored === 'light' ? 'light' : 'dark');
+  }, []);
+
   return (
     <AuthProvider>
       <Router />
@@ -42,5 +47,6 @@ export function App() {
 }
 
 export function navigate(hash: string): void {
+  if (location.hash === hash) return;
   location.hash = hash;
 }
