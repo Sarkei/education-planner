@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { GraduationCap } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { isDemoMode } from '../lib/demo';
 
 export function LoginPage() {
   const { login, register } = useAuth();
+  const demo = isDemoMode();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [needsSetup, setNeedsSetup] = useState(false);
   const [email, setEmail] = useState('');
@@ -17,10 +19,10 @@ export function LoginPage() {
     void api<{ needsSetup: boolean }>('/auth/config')
       .then((d) => {
         setNeedsSetup(d.needsSetup);
-        if (d.needsSetup) setMode('register');
+        if (d.needsSetup && !demo) setMode('register');
       })
       .catch(() => undefined);
-  }, []);
+  }, [demo]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,23 +53,27 @@ export function LoginPage() {
 
         <div className="card p-5">
           <p className="mb-4 text-[13px] text-muted">
-            {needsSetup
-              ? 'Erster Start: Das erste Konto wird Administrator.'
-              : 'Melde dich an, um deine Ordner und Dokumente zu öffnen.'}
+            {demo
+              ? 'Demo-Modus: Du siehst ein Beispielkonto mit erfundenen Unterlagen.'
+              : needsSetup
+                ? 'Erster Start: Das erste Konto wird Administrator.'
+                : 'Melde dich an, um deine Ordner und Dokumente zu öffnen.'}
           </p>
 
-          <div className="pill-nav mb-4 w-full">
-            {(['login', 'register'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={`pill flex-1 justify-center ${mode === m ? 'active' : ''}`}
-                onClick={() => setMode(m)}
-              >
-                {m === 'login' ? 'Anmelden' : 'Registrieren'}
-              </button>
-            ))}
-          </div>
+          {!demo && (
+            <div className="pill-nav mb-4 w-full">
+              {(['login', 'register'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={`pill flex-1 justify-center ${mode === m ? 'active' : ''}`}
+                  onClick={() => setMode(m)}
+                >
+                  {m === 'login' ? 'Anmelden' : 'Registrieren'}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={submit} className="space-y-3">
             {mode === 'register' && (

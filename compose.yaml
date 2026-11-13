@@ -39,6 +39,7 @@ services:
       INTERNAL_BASE_URL: http://education-planner:3000
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://education-planner.nas-timgreen.com}
       ALLOW_DEV_RESET_LINK: ${ALLOW_DEV_RESET_LINK:-0}
+      DEMO_EMAIL: ${DEMO_EMAIL:-demo@example.com}
     ports:
       - "22238:3000"
     volumes:

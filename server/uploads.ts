@@ -13,6 +13,7 @@ import { mimeFor } from './templates';
 export const uploadsRouter = Router();
 
 const CHUNK_LIMIT = '96mb';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Upload starten: die App schickt Name, Größe und Zielordner. */
 uploadsRouter.post('/init', requireAuth, async (req: AuthRequest, res) => {
@@ -44,12 +45,30 @@ uploadsRouter.post('/init', requireAuth, async (req: AuthRequest, res) => {
   res.status(201).json({ uploadId: id, chunkSize: 8 * 1024 * 1024 });
 });
 
+/** Textdatei direkt anlegen/bearbeiten (für .md/.txt ohne Office) — muss vor /:id/:index stehen. */
+uploadsRouter.put('/text/:id', requireAuth, async (req: AuthRequest, res) => {
+  const access = await nodeAccess(req.params.id, req.userId!);
+  if (!access || access.node.kind !== 'file' || !canWrite(access)) {
+    fail(res, 403, 'forbidden', 'Keine Schreibrechte.');
+    return;
+  }
+  const content = String((req.body as { content?: string })?.content ?? '');
+  const size = await writeAtomic(absolute(access.node.storage_path), Buffer.from(content, 'utf8'));
+  await pool.query('UPDATE nodes SET size = $2, updated_at = now(), version = version + 1 WHERE id = $1', [req.params.id, size]);
+  void indexNode(req.params.id).catch(() => undefined);
+  res.json({ ok: true, size });
+});
+
 /** Ein Teil hochladen (Rohbytes, Reihenfolge über die Index-Nummer). */
 uploadsRouter.put(
   '/:id/:index',
   requireAuth,
   express.raw({ type: () => true, limit: CHUNK_LIMIT }),
   async (req: AuthRequest, res) => {
+    if (!UUID_RE.test(req.params.id)) {
+      fail(res, 404, 'not-found', 'Upload nicht gefunden.');
+      return;
+    }
     const session = await pool.query<{ user_id: number; chunks: number }>('SELECT user_id, chunks FROM upload_sessions WHERE id = $1', [req.params.id]);
     if (!session.rowCount || session.rows[0].user_id !== req.userId) {
       fail(res, 404, 'not-found', 'Upload nicht gefunden.');
@@ -74,6 +93,10 @@ uploadsRouter.put(
 
 /** Upload abschließen: Teile zusammensetzen und als Datei anlegen. */
 uploadsRouter.post('/:id/complete', requireAuth, async (req: AuthRequest, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    fail(res, 404, 'not-found', 'Upload nicht gefunden.');
+    return;
+  }
   const session = await pool.query<{ user_id: number; parent_id: string | null; name: string; mime: string | null }>(
     'SELECT user_id, parent_id, name, mime FROM upload_sessions WHERE id = $1',
     [req.params.id],
@@ -138,21 +161,6 @@ uploadsRouter.post('/:id/complete', requireAuth, async (req: AuthRequest, res) =
     },
   });
 });
-
-/** Textdatei direkt anlegen/bearbeiten (für .md/.txt ohne Office). */
-uploadsRouter.put('/text/:id', requireAuth, async (req: AuthRequest, res) => {
-  const access = await nodeAccess(req.params.id, req.userId!);
-  if (!access || access.node.kind !== 'file' || !canWrite(access)) {
-    fail(res, 403, 'forbidden', 'Keine Schreibrechte.');
-    return;
-  }
-  const content = String((req.body as { content?: string })?.content ?? '');
-  const size = await writeAtomic(absolute(access.node.storage_path), Buffer.from(content, 'utf8'));
-  await pool.query('UPDATE nodes SET size = $2, updated_at = now(), version = version + 1 WHERE id = $1', [req.params.id, size]);
-  void indexNode(req.params.id).catch(() => undefined);
-  res.json({ ok: true, size });
-});
-
 
 async function uniqueName(parentId: string | null, desired: string): Promise<string> {
   const base = safeName(desired);

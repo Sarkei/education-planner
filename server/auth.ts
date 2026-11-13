@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -66,6 +66,33 @@ authRouter.post('/login', async (req, res) => {
     user: { id: user.id, email: user.email, name: user.name, role: user.role },
   });
 });
+
+/** Demo-Zugang: anonym, ohne Passwort, für demo-*-Domains und ?demo=1. */
+const DEMO_EMAIL = process.env.DEMO_EMAIL?.trim() || 'demo@example.com';
+
+async function handleDemo(_req: Request, res: Response) {
+  try {
+    const { rows } = await pool.query<{ id: number; email: string; name: string; role: string; token_version: number }>(
+      'SELECT id, email, name, role, token_version FROM users WHERE lower(email) = lower($1) LIMIT 1',
+      [DEMO_EMAIL],
+    );
+    const user = rows[0];
+    if (!user) {
+      fail(res, 404, 'demo-missing', 'Demo ist nicht eingerichtet.');
+      return;
+    }
+    res.json({
+      token: signToken(user),
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    });
+  } catch (e) {
+    console.error('[auth/demo]', e);
+    fail(res, 500, 'demo-failed', 'Demo konnte nicht geladen werden.');
+  }
+}
+
+authRouter.get('/demo', handleDemo);
+authRouter.post('/demo', handleDemo);
 
 authRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
   const { rows } = await pool.query('SELECT id, email, name, role, created_at FROM users WHERE id = $1', [req.userId]);

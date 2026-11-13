@@ -30,6 +30,23 @@ im Office-Editor. Alles liegt als echte Datei auf dem NAS, Änderungen werden au
 - **Download** einzeln oder als ZIP für ganze Ordner.
 - Nutzerverwaltung (erster Account wird Administrator), Passwort ändern, Passwort-Reset-Link.
 
+## Demo-Betrieb
+
+`demo-education.nas-timgreen.com` (jede Domain, die mit `demo-` beginnt) und `?demo=1` starten
+automatisch ein anonymes Beispielkonto (`demo@example.com`, „Max Muster") mit Musterunterlagen –
+ohne Anmeldung, ohne Registrierung. Die App holt sich dafür per `GET|POST /api/auth/demo` einen
+Token; im Demo-Modus zeigt die Anmeldeseite nur „Anmelden", keinen Registrieren-Reiter.
+
+Demo-Daten neu befüllen (löscht den bisherigen Demo-Baum):
+
+```bash
+node scripts/seed-demo.mjs          # im Repo, spricht http://127.0.0.1:3000 an
+```
+
+Das Skript legt Schuljahr, Fächer (Mathematik, Deutsch, Englisch, Informatik, Netzwerktechnik),
+Hausaufgaben/Termine und echte docx/xlsx-Dateien an. Der Account-Name lässt sich über
+`DEMO_EMAIL` ändern (Default `demo@example.com`).
+
 ## Technik
 
 Vite + React 19 + Tailwind 4 im Frontend, ein Express-Server, PostgreSQL, ONLYOFFICE Docs
