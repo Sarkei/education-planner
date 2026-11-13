@@ -39,19 +39,19 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--accent-soft)]">
-            <GraduationCap className="h-5 w-5 text-[var(--accent)]" />
-          </div>
+    <div className="flex min-h-screen items-center justify-center px-5 py-12">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <span className="app-brand__mark">
+            <GraduationCap className="h-5 w-5" />
+          </span>
           <div>
-            <p className="serif text-2xl leading-tight">Education Planner</p>
-            <p className="text-[12px] text-muted">Unterlagen für die Berufsschule</p>
+            <p className="font-serif text-xl leading-tight">Education Planner</p>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">Unterlagen für die Berufsschule</p>
           </div>
         </div>
 
-        <div className="card p-5">
+        <div className="app-card p-6">
           <p className="mb-4 text-[13px] text-muted">
             {demo
               ? 'Demo-Modus: Du siehst ein Beispielkonto mit erfundenen Unterlagen.'

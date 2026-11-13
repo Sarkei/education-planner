@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import 'tailwindcss';
+/* Kopfzeile, Seitenkopf, Kennzahlen, Karten — Vorlage: knowledge/design-system/shell.css */
+@import './shell.css';
 
 /* ============================================================
    Tim-Designsystem · Grau + Grün
@@ -51,6 +53,8 @@
   --accent-soft: #e6f1eb;
   --accent-ink: #123a28;
   --on-accent: #ffffff;
+  /* in shell.css referenziert: Text auf gefüllter Pille */
+  --on-accent-soft: var(--accent-ink);
 
   /* Status */
   --danger: #b4453a;
@@ -119,9 +123,12 @@
 /* ---------- Basis ---------- */
 
 html,
-body,
+body {
+  min-height: 100%;
+}
+
 #root {
-  height: 100%;
+  min-height: 100vh;
 }
 
 html,

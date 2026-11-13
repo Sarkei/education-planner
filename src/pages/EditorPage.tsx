@@ -144,7 +144,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <div className="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center">
         <ShieldAlert className="h-6 w-6 text-[var(--danger)]" />
         <p className="text-sm font-medium text-[var(--danger)]">{error}</p>
         <button className="btn btn-ghost" onClick={() => navigate('#/files')}>
@@ -156,7 +156,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
   if (!node) {
     return (
-      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted">
+      <div className="flex h-screen items-center justify-center gap-2 text-sm text-muted">
         <Loader2 className="h-4 w-4 animate-spin" /> Datei wird geöffnet …
       </div>
     );
@@ -165,7 +165,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
   const canEdit = node.permission !== 'view';
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-screen flex-col">
       <header className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-2.5">
         <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => navigate('#/files')} title="Zurück">
           <ArrowLeft className="h-4 w-4" />

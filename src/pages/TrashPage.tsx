@@ -38,18 +38,22 @@ export function TrashPage() {
 
   return (
     <Shell tab="trash">
-      <div className="scroll-thin h-full overflow-auto p-4">
-        <div className="mx-auto max-w-4xl">
-          <PageHead eyebrow="Aufbewahrung" title="Papierkorb" hint="Gelöschte Ordner und Dateien bleiben hier, bis du sie endgültig entfernst." />
+      <PageHead
+        label="Aufbewahrung"
+        title="Papierkorb"
+        intro="Gelöschte Ordner und Dateien bleiben hier, bis du sie endgültig entfernst."
+      />
 
-          {error && <p className="mb-3 alert-danger text-xs">{error}</p>}
+      <section className="app-section app-container app-section--tight">
+        <div className="app-narrow">
+          {error && <p className="alert-danger mb-3 text-xs">{error}</p>}
 
           {loading ? (
             <p className="text-sm text-muted">Lädt …</p>
           ) : items.length === 0 ? (
             <EmptyState title="Papierkorb ist leer" hint="Was du löschst, landet zuerst hier — nichts ist sofort weg." />
           ) : (
-            <div className="space-y-1.5">
+            <div className="app-list">
               {items.map((item) => (
                 <div key={item.id} className="row-item">
                   {item.kind === 'folder' ? <Folder className="h-[18px] w-[18px] text-[var(--accent)]" /> : <FileIcon className="h-[18px] w-[18px] text-muted" />}
@@ -68,7 +72,7 @@ export function TrashPage() {
             </div>
           )}
         </div>
-      </div>
+      </section>
     </Shell>
   );
 }

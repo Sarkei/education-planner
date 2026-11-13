@@ -64,10 +64,10 @@ function formatSize(bytes: number): string {
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
 }
 
-export function FilesPage() {
+export function FilesPage({ initialFolder = null }: { initialFolder?: string | null }) {
   const [nodes, setNodes] = useState<NodeItem[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolder);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(initialFolder ? [initialFolder] : []));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -338,52 +338,97 @@ export function FilesPage() {
 
   return (
     <Shell tab="files">
-      <div className="flex h-full">
-        <aside className="hidden w-72 shrink-0 flex-col border-r border-[var(--line)] p-3 md:flex">
-          <div className="mb-1.5 flex gap-1.5">
-            <button className="btn btn-ghost min-w-0 flex-1 !px-3 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
+      <PageHead
+        label="Sammlung"
+        title={currentTitle}
+        intro="Ordner und Dateien durchsehen, anlegen und bearbeiten — geordnet nach Fächern und Lerngruppen."
+        action={
+          <div className="app-toolbar">
+            <div className="pill-nav !p-0.5">
+              <button
+                className={`pill !px-2 !py-1.5 ${view === 'list' ? 'active' : ''}`}
+                onClick={() => switchView('list')}
+                title="Listenansicht"
+              >
+                <List className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className={`pill !px-2 !py-1.5 ${view === 'grid' ? 'active' : ''}`}
+                onClick={() => switchView('grid')}
+                title="Galerieansicht"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
               <FolderPlus className="h-3.5 w-3.5" /> Ordner
             </button>
             <button
-              className="btn btn-ghost min-w-0 flex-1 !px-3 !py-1.5 text-xs"
+              className="btn btn-ghost !py-1.5 text-xs md:hidden"
               onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
             >
               <FilePlus className="h-3.5 w-3.5" /> Datei
             </button>
+            <button className="btn btn-primary !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
+              <Upload className="h-3.5 w-3.5" /> Hochladen
+            </button>
           </div>
-          <button className="btn btn-ghost mb-2 w-full !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
-            <Upload className="h-3.5 w-3.5" /> Hochladen
-          </button>
-          <div className="scroll-thin min-h-0 flex-1 overflow-auto">
-            <p className="label mt-2">Meine Dateien</p>
-            <Tree
-              nodes={nodes.filter((n) => !n.shared)}
-              selectedId={selectedFolder}
-              onSelect={(n) => setSelectedFolder(n.id)}
-              onDrop={(d, t) => void moveNode(d, t)}
-              expanded={expanded}
-              toggle={toggle}
-              onContextMenu={(node, x, y) => setMenu({ x, y, node })}
-            />
-            {sharedRoots.length > 0 && (
-              <>
-                <p className="label mt-4">Mit mir geteilt</p>
-                <Tree
-                  nodes={sharedRoots}
-                  selectedId={selectedFolder}
-                  onSelect={(n) => setSelectedFolder(n.id)}
-                  onDrop={(d, t) => void moveNode(d, t)}
-                  expanded={expanded}
-                  toggle={toggle}
-                  onContextMenu={(node, x, y) => setMenu({ x, y, node })}
-                />
-              </>
-            )}
+        }
+      />
+
+      <div className="app-container app-files">
+        <aside className="app-files__side">
+          <div className="app-card app-tree-card">
+            <div className="flex gap-1.5">
+              <button className="btn btn-ghost min-w-0 flex-1 !px-3 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
+                <FolderPlus className="h-3.5 w-3.5" /> Ordner
+              </button>
+              <button
+                className="btn btn-ghost min-w-0 flex-1 !px-3 !py-1.5 text-xs"
+                onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
+              >
+                <FilePlus className="h-3.5 w-3.5" /> Datei
+              </button>
+            </div>
+            <button className="btn btn-ghost w-full !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
+              <Upload className="h-3.5 w-3.5" /> Hochladen
+            </button>
+
+            <div className="app-tree-scroll">
+              <p className="app-label" style={{ marginTop: 8 }}>
+                Meine Dateien
+              </p>
+              <Tree
+                nodes={nodes.filter((n) => !n.shared)}
+                selectedId={selectedFolder}
+                onSelect={(n) => setSelectedFolder(n.id)}
+                onDrop={(d, t) => void moveNode(d, t)}
+                expanded={expanded}
+                toggle={toggle}
+                onContextMenu={(node, x, y) => setMenu({ x, y, node })}
+              />
+              {sharedRoots.length > 0 && (
+                <>
+                  <p className="app-label" style={{ marginTop: 16 }}>
+                    Mit mir geteilt
+                  </p>
+                  <Tree
+                    nodes={sharedRoots}
+                    selectedId={selectedFolder}
+                    onSelect={(n) => setSelectedFolder(n.id)}
+                    onDrop={(d, t) => void moveNode(d, t)}
+                    expanded={expanded}
+                    toggle={toggle}
+                    onContextMenu={(node, x, y) => setMenu({ x, y, node })}
+                  />
+                </>
+              )}
+            </div>
           </div>
         </aside>
 
-        <main
-          className={`scroll-thin min-w-0 flex-1 overflow-auto p-4 ${dragging ? 'bg-[var(--accent-soft)]' : ''}`}
+        <div
+          className={`min-w-0 ${dragging ? 'app-files__drop' : ''}`}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) {
               e.preventDefault();
@@ -399,167 +444,76 @@ export function FilesPage() {
             }
           }}
         >
-          <div className="mx-auto max-w-6xl">
-            <PageHead
-              eyebrow="Sammlung"
-              title={currentTitle}
-              hint={`${children.length} ${children.length === 1 ? 'Eintrag' : 'Einträge'} · Dateien liegen als echte Dateien auf dem NAS`}
-              action={
-                <div className="flex gap-1.5">
-                  <div className="pill-nav !p-0.5">
-                    <button
-                      className={`pill !px-2 !py-1.5 ${view === 'list' ? 'active' : ''}`}
-                      onClick={() => switchView('list')}
-                      title="Listenansicht"
-                    >
-                      <List className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      className={`pill !px-2 !py-1.5 ${view === 'grid' ? 'active' : ''}`}
-                      onClick={() => switchView('grid')}
-                      title="Galerieansicht"
-                    >
-                      <LayoutGrid className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
-                    <FolderPlus className="h-3.5 w-3.5" /> Ordner
-                  </button>
-                  <button
-                    className="btn btn-ghost !py-1.5 text-xs md:hidden"
-                    onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
-                  >
-                    <FilePlus className="h-3.5 w-3.5" /> Datei
-                  </button>
-                  <button className="btn btn-primary !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
-                    <Upload className="h-3.5 w-3.5" /> Hochladen
-                  </button>
-                </div>
-              }
-            />
+          <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px]">
+            <button
+              className="btn btn-ghost !px-2 !py-1"
+              onClick={() => setSelectedFolder(breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].id : null)}
+              disabled={!selectedFolder}
+              title="Eine Ebene zurück"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </button>
+            <button className={selectedFolder ? 'text-muted hover:underline' : 'font-semibold'} onClick={() => setSelectedFolder(null)}>
+              Alle Dateien
+            </button>
+            {breadcrumb.map((item) => (
+              <span key={item.id} className="flex items-center gap-1">
+                <ChevronRight className="h-3 w-3 text-muted" />
+                <button onClick={() => setSelectedFolder(item.id)} className="hover:underline">
+                  {item.name}
+                </button>
+              </span>
+            ))}
+            <span className="ml-auto text-[11px] text-muted">
+              {children.length} {children.length === 1 ? 'Eintrag' : 'Einträge'}
+            </span>
+          </div>
 
-            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px]">
-              <button
-                className="btn btn-ghost !px-2 !py-1"
-                onClick={() => setSelectedFolder(breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].id : null)}
-                disabled={!selectedFolder}
-                title="Eine Ebene zurück"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-              </button>
-              <button className={selectedFolder ? 'text-muted hover:underline' : 'font-semibold'} onClick={() => setSelectedFolder(null)}>
-                Alle Dateien
-              </button>
-              {breadcrumb.map((item) => (
-                <span key={item.id} className="flex items-center gap-1">
-                  <ChevronRight className="h-3 w-3 text-muted" />
-                  <button onClick={() => setSelectedFolder(item.id)} className="hover:underline">
-                    {item.name}
-                  </button>
-                </span>
+          {error && <p className="alert-danger mb-3 text-xs font-medium">{error}</p>}
+
+          {uploads.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {uploads.map((u) => (
+                <div key={u.name} className="app-card p-3">
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span className="truncate">{u.name}</span>
+                    <span className="text-muted">{u.percent}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
+                    <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${u.percent}%` }} />
+                  </div>
+                </div>
               ))}
             </div>
+          )}
 
-            {error && (
-              <p className="mb-3 alert-danger mb-3 text-xs font-medium">{error}</p>
-            )}
-
-            {uploads.length > 0 && (
-              <div className="mb-3 space-y-2">
-                {uploads.map((u) => (
-                  <div key={u.name} className="card p-3">
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="truncate">{u.name}</span>
-                      <span className="text-muted">{u.percent}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
-                      <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${u.percent}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {loading ? (
-              <p className="text-sm text-muted">Lädt …</p>
-            ) : children.length === 0 ? (
-              <EmptyState
-                title="Hier ist noch nichts"
-                hint="Zieh Dateien aus dem Explorer in dieses Fenster oder nutze „Hochladen“. Ordner legst du mit „Ordner“ an."
-                action={
-                  <button className="btn btn-ghost mt-2" onClick={() => setNewFolderOpen(true)}>
-                    <FolderPlus className="h-4 w-4" /> Ersten Ordner anlegen
-                  </button>
-                }
-              />
-            ) : view === 'grid' ? (
-              <div
-                className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-                onContextMenu={(e) => {
-                  if ((e.target as HTMLElement).closest('.tile')) return;
-                  e.preventDefault();
-                  setMenu({ x: e.clientX, y: e.clientY, node: null });
-                }}
-              >
-                {children.map((node) => {
-                  const isImage = node.kind === 'file' && !!thumbs[node.id];
-                  return (
-                    <div
-                      key={node.id}
-                      className="tile card group relative overflow-hidden"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', node.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      onDragOver={(e) => {
-                        if (node.kind !== 'folder') return;
-                        e.preventDefault();
-                        setDropTarget(node.id);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDropTarget(null);
-                        const dragId = e.dataTransfer.getData('text/plain');
-                        if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
-                      }}
-                      onClick={() => open(node)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setMenu({ x: e.clientX, y: e.clientY, node });
-                      }}
-                      title={node.name}
-                    >
-                      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-2">
-                        {isImage ? (
-                          <img src={thumbs[node.id]} alt={node.name} loading="lazy" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="scale-[2] opacity-60">{iconFor(node)}</span>
-                        )}
-                      </div>
-                      <div className="border-t border-[var(--line)] px-2.5 py-2">
-                        <p className="truncate text-[12.5px] font-medium">{node.name}</p>
-                        <p className="text-[10.5px] text-muted">
-                          {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                className="space-y-1.5"
-                onContextMenu={(e) => {
-                  if ((e.target as HTMLElement).closest('.row-item')) return;
-                  e.preventDefault();
-                  setMenu({ x: e.clientX, y: e.clientY, node: null });
-                }}
-              >
-                {children.map((node) => (
+          {loading ? (
+            <p className="text-sm text-muted">Lädt …</p>
+          ) : children.length === 0 ? (
+            <EmptyState
+              title="Hier ist noch nichts"
+              hint="Zieh Dateien aus dem Explorer in dieses Fenster oder nutze „Hochladen“. Ordner legst du mit „Ordner“ an."
+              action={
+                <button className="btn btn-primary mt-2" onClick={() => setNewFolderOpen(true)}>
+                  <FolderPlus className="h-4 w-4" /> Ersten Ordner anlegen
+                </button>
+              }
+            />
+          ) : view === 'grid' ? (
+            <div
+              className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+              onContextMenu={(e) => {
+                if ((e.target as HTMLElement).closest('.tile')) return;
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, node: null });
+              }}
+            >
+              {children.map((node) => {
+                const isImage = node.kind === 'file' && !!thumbs[node.id];
+                return (
                   <div
                     key={node.id}
-                    className={`row-item group ${dropTarget === node.id ? 'drop-target' : ''}`}
+                    className="tile card group relative overflow-hidden"
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/plain', node.id);
@@ -570,7 +524,6 @@ export function FilesPage() {
                       e.preventDefault();
                       setDropTarget(node.id);
                     }}
-                    onDragLeave={() => setDropTarget((c) => (c === node.id ? null : c))}
                     onDrop={(e) => {
                       e.preventDefault();
                       setDropTarget(null);
@@ -582,66 +535,117 @@ export function FilesPage() {
                       e.preventDefault();
                       setMenu({ x: e.clientX, y: e.clientY, node });
                     }}
+                    title={node.name}
                   >
-                    {iconFor(node)}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-medium" title={node.name}>
-                        {node.name}
-                      </p>
-                      <p className="text-[11px] text-muted">
-                        {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
-                        {node.permission !== 'owner' ? ` · ${node.permission === 'edit' ? 'bearbeitbar' : 'nur ansehen'}` : ''}
-                      </p>
+                    <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-2">
+                      {isImage ? (
+                        <img src={thumbs[node.id]} alt={node.name} loading="lazy" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="scale-[2] opacity-60">{iconFor(node)}</span>
+                      )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1"
-                        title="Umbenennen"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenaming(node);
-                          setRenameValue(node.name);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1"
-                        title="Teilen"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShareNode(node);
-                        }}
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1"
-                        title="Herunterladen"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void download(node);
-                        }}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1 text-[var(--danger)]"
-                        title="In den Papierkorb"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void remove(node);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                    <div className="border-t border-[var(--line)] px-2.5 py-2">
+                      <p className="truncate text-[12.5px] font-medium">{node.name}</p>
+                      <p className="text-[10.5px] text-muted">{node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </main>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              className="app-list"
+              onContextMenu={(e) => {
+                if ((e.target as HTMLElement).closest('.row-item')) return;
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, node: null });
+              }}
+            >
+              {children.map((node) => (
+                <div
+                  key={node.id}
+                  className={`row-item group ${dropTarget === node.id ? 'drop-target' : ''}`}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', node.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    if (node.kind !== 'folder') return;
+                    e.preventDefault();
+                    setDropTarget(node.id);
+                  }}
+                  onDragLeave={() => setDropTarget((c) => (c === node.id ? null : c))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDropTarget(null);
+                    const dragId = e.dataTransfer.getData('text/plain');
+                    if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
+                  }}
+                  onClick={() => open(node)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, node });
+                  }}
+                >
+                  {iconFor(node)}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-medium" title={node.name}>
+                      {node.name}
+                    </p>
+                    <p className="text-[11px] text-muted">
+                      {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
+                      {node.permission !== 'owner' ? ` · ${node.permission === 'edit' ? 'bearbeitbar' : 'nur ansehen'}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      className="btn btn-ghost !px-1.5 !py-1"
+                      title="Umbenennen"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenaming(node);
+                        setRenameValue(node.name);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      className="btn btn-ghost !px-1.5 !py-1"
+                      title="Teilen"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShareNode(node);
+                      }}
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      className="btn btn-ghost !px-1.5 !py-1"
+                      title="Herunterladen"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void download(node);
+                      }}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      className="btn btn-ghost !px-1.5 !py-1 text-[var(--danger)]"
+                      title="In den Papierkorb"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void remove(node);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <input

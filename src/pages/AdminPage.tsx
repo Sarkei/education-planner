@@ -57,19 +57,25 @@ export function AdminPage() {
   if (user?.role !== 'admin') {
     return (
       <Shell tab="users">
-        <p className="p-6 text-sm text-muted">Nur für Administratoren.</p>
+        <section className="app-section app-container">
+          <p className="text-sm text-muted">Nur für Administratoren.</p>
+        </section>
       </Shell>
     );
   }
 
   return (
     <Shell tab="users">
-      <div className="scroll-thin h-full overflow-auto p-4">
-        <div className="mx-auto max-w-5xl">
-          <PageHead eyebrow="Zugänge" title="Nutzer" hint="Jeder bekommt ein eigenes Konto und sieht nur eigene Dateien plus Freigaben." />
+      <PageHead
+        label="Zugänge"
+        title="Nutzer"
+        intro="Jeder bekommt ein eigenes Konto und sieht nur eigene Dateien plus Freigaben."
+      />
 
+      <section className="app-section app-container app-section--tight">
+        <div className="app-narrow-wide">
           <div className="grid gap-4 lg:grid-cols-[1fr_360px] lg:items-start">
-            <div className="space-y-1.5">
+            <div className="app-list">
               {users.map((u) => (
                 <div key={u.id} className="row-item">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent)]">
@@ -123,7 +129,7 @@ export function AdminPage() {
             </div>
           </div>
         </div>
-      </div>
+      </section>
     </Shell>
   );
 }
