@@ -154,7 +154,7 @@ async function main() {
     await call(`/nodes/${node.id}/purge`, { method: 'DELETE' });
   }
 
-  const root = await folder(null, 'Schuljahr 2026–27 (IT11b)');
+  const root = await folder(null, 'Schuljahr 2026–27');
 
   // Mathematik
   const mathe = await folder(root, 'Mathematik');
@@ -336,7 +336,7 @@ Write a summary of the article "Digital learning in schools" (150 words).
 -- Alle Schüler einer Klasse
 SELECT name, vorname
 FROM schueler
-WHERE klasse = 'IT11b'
+WHERE klasse = 'IT10a'
 ORDER BY name;
 
 -- Anzahl je Klasse
