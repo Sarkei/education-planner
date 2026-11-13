@@ -109,13 +109,6 @@ export function Shell({ tab, children }: { tab: SectionId; children: ReactNode }
       </header>
 
       <main>{children}</main>
-
-      <footer className="app-footer">
-        <div className="app-container flex flex-wrap items-center justify-between gap-2">
-          <span>Education Planner · Unterlagen für die Berufsschule</span>
-          <span>Dateien liegen als echte Dateien auf dem NAS</span>
-        </div>
-      </footer>
     </div>
   );
 }
