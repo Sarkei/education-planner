@@ -360,15 +360,17 @@ export function FilesPage({ initialFolder = null }: { initialFolder?: string | n
                 <LayoutGrid className="h-3.5 w-3.5" />
               </button>
             </div>
-            <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
-              <FolderPlus className="h-3.5 w-3.5" /> Ordner
-            </button>
-            <button
-              className="btn btn-ghost !py-1.5 text-xs md:hidden"
-              onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
-            >
-              <FilePlus className="h-3.5 w-3.5" /> Datei
-            </button>
+            <div className="flex gap-1.5 md:hidden">
+              <button className="btn btn-ghost !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
+                <FolderPlus className="h-3.5 w-3.5" /> Ordner
+              </button>
+              <button
+                className="btn btn-ghost !py-1.5 text-xs"
+                onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
+              >
+                <FilePlus className="h-3.5 w-3.5" /> Datei
+              </button>
+            </div>
             <button className="btn btn-primary !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
               <Upload className="h-3.5 w-3.5" /> Hochladen
             </button>
