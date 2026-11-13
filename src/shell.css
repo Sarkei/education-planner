@@ -453,3 +453,9 @@
 /* Fußleiste am Seitenende halten, auch wenn der Inhalt kürzer ist */
 .app { display: flex; flex-direction: column; }
 .app > main { flex: 1 0 auto; }
+
+.app-mobile-nav button.is-active {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+  font-weight: 500;
+}
