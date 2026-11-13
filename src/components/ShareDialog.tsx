@@ -93,7 +93,7 @@ export function ShareDialog({ node, onClose }: { node: NodeItem; onClose: () => 
         {node.kind === 'folder' && (
           <p className="text-[11px] text-muted">Die Freigabe gilt für den Ordner und alles, was darin liegt.</p>
         )}
-        {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-600">{error}</p>}
+        {error && <p className="alert-danger text-xs">{error}</p>}
       </div>
     </Modal>
   );

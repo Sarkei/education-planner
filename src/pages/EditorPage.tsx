@@ -218,7 +218,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
       {isText ? (
         <textarea
-          className="scroll-thin min-h-0 flex-1 resize-none border-0 bg-[var(--bg)] p-6 font-mono text-[13px] leading-relaxed outline-none"
+          className="scroll-thin min-h-0 flex-1 resize-none border-0 bg-[var(--surface)] p-6 font-mono text-[13px] leading-relaxed outline-none"
           value={text ?? ''}
           readOnly={!canEdit}
           onChange={(e) => {
@@ -233,7 +233,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
           }}
         />
       ) : isImage ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[var(--bg-soft)] p-6">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-surface-2 p-6">
           {previewUrl ? (
             <img src={previewUrl} alt={node.name} className="max-h-full max-w-full rounded-xl" />
           ) : (
@@ -242,7 +242,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
         </div>
       ) : isPdf ? (
         previewUrl ? (
-          <iframe src={previewUrl} title={node.name} className="min-h-0 flex-1 border-0 bg-[var(--bg-soft)]" />
+          <iframe src={previewUrl} title={node.name} className="min-h-0 flex-1 border-0 bg-surface-2" />
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-muted" />
@@ -254,7 +254,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
           <p className="text-[12px] text-muted">{node.name}</p>
         </div>
       ) : isVideo ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-2">
+        <div className="media-stage flex min-h-0 flex-1 items-center justify-center p-2">
           {previewUrl ? (
             <video src={previewUrl} controls className="max-h-full max-w-full rounded-lg" />
           ) : (

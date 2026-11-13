@@ -98,7 +98,7 @@ export function LoginPage() {
                 placeholder="mindestens 8 Zeichen"
               />
             </div>
-            {error && <p className="rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs font-medium text-[var(--danger)]">{error}</p>}
+            {error && <p className="alert-danger text-xs font-medium">{error}</p>}
             <button className="btn btn-primary w-full" disabled={busy}>
               {busy ? 'Einen Moment …' : mode === 'login' ? 'Anmelden' : 'Konto anlegen'}
             </button>

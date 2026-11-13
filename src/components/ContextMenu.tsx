@@ -38,7 +38,7 @@ export function ContextMenu({ x, y, entries, onClose }: { x: number; y: number; 
   return (
     <div
       ref={ref}
-      className="fixed z-[60] min-w-[212px] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--card)] py-1 shadow-xl"
+      className="menu fixed z-[60] min-w-[212px] overflow-hidden py-1"
       style={{ left: pos.x, top: pos.y }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}

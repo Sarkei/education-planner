@@ -110,7 +110,7 @@ export function AdminPage() {
                   <option value="admin">Administrator</option>
                 </select>
               </div>
-              {error && <p className="rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs text-[var(--danger)]">{error}</p>}
+              {error && <p className="alert-danger text-xs">{error}</p>}
               {notice && <p className="rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">{notice}</p>}
               <button
                 className="btn btn-primary w-full"

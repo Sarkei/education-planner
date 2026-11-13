@@ -89,7 +89,7 @@ export function CreateFileDialog({
           </div>
         </div>
 
-        {error && <p className="rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs text-[var(--danger)]">{error}</p>}
+        {error && <p className="alert-danger text-xs">{error}</p>}
 
         <button className="btn btn-primary w-full" onClick={() => void create()} disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Anlegen

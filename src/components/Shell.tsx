@@ -28,7 +28,7 @@ export function Shell({ tab, children }: { tab: Tab; children: ReactNode }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-[var(--line)] bg-[var(--bg)] px-4 py-3">
+      <header className="border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--accent-soft)]">

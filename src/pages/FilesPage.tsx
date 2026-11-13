@@ -341,11 +341,11 @@ export function FilesPage() {
       <div className="flex h-full">
         <aside className="hidden w-72 shrink-0 flex-col border-r border-[var(--line)] p-3 md:flex">
           <div className="mb-1.5 flex gap-1.5">
-            <button className="btn btn-primary flex-1 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
+            <button className="btn btn-ghost min-w-0 flex-1 !px-3 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
               <FolderPlus className="h-3.5 w-3.5" /> Ordner
             </button>
             <button
-              className="btn btn-ghost flex-1 !py-1.5 text-xs"
+              className="btn btn-ghost min-w-0 flex-1 !px-3 !py-1.5 text-xs"
               onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
             >
               <FilePlus className="h-3.5 w-3.5" /> Datei
@@ -461,7 +461,7 @@ export function FilesPage() {
             </div>
 
             {error && (
-              <p className="mb-3 rounded-xl bg-[var(--danger)]/10 px-3 py-2 text-xs font-medium text-[var(--danger)]">{error}</p>
+              <p className="mb-3 alert-danger mb-3 text-xs font-medium">{error}</p>
             )}
 
             {uploads.length > 0 && (
@@ -530,7 +530,7 @@ export function FilesPage() {
                       }}
                       title={node.name}
                     >
-                      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-[var(--bg-soft)]">
+                      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-2">
                         {isImage ? (
                           <img src={thumbs[node.id]} alt={node.name} loading="lazy" className="h-full w-full object-cover" />
                         ) : (

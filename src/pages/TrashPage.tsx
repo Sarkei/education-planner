@@ -42,7 +42,7 @@ export function TrashPage() {
         <div className="mx-auto max-w-4xl">
           <PageHead eyebrow="Aufbewahrung" title="Papierkorb" hint="Gelöschte Ordner und Dateien bleiben hier, bis du sie endgültig entfernst." />
 
-          {error && <p className="mb-3 rounded-xl bg-[var(--danger)]/10 px-3 py-2 text-xs text-[var(--danger)]">{error}</p>}
+          {error && <p className="mb-3 alert-danger text-xs">{error}</p>}
 
           {loading ? (
             <p className="text-sm text-muted">Lädt …</p>
