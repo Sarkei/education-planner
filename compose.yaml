@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: education-planner-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-education}
+      POSTGRES_USER: ${POSTGRES_USER:-edu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-edu} -d ${POSTGRES_DB:-education}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: education-planner
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-education}
+      POSTGRES_USER: ${POSTGRES_USER:-edu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      FILES_ROOT: /data/files
+      VERSIONS_ROOT: /data/versions
+      TRASH_ROOT: /data/trash
+      TMP_ROOT: /data/tmp
+      ONLYOFFICE_URL: ${ONLYOFFICE_URL:-https://office.nas-timgreen.com}
+      ONLYOFFICE_JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+      INTERNAL_BASE_URL: http://education-planner:3000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://education-planner.nas-timgreen.com}
+      ALLOW_DEV_RESET_LINK: ${ALLOW_DEV_RESET_LINK:-0}
+      DEMO_EMAIL: ${DEMO_EMAIL:-demo@example.com}
+    ports:
+      - "22238:3000"
+    volumes:
+      - ${FILES_DIR:-/volume3/education_planner/files}:/data/files
+      - ${VERSIONS_DIR:-/volume3/education_planner/versions}:/data/versions
+      - ${TRASH_DIR:-/volume3/education_planner/trash}:/data/trash
+      - ${TMP_DIR:-/volume3/education_planner/tmp}:/data/tmp
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - default
+      - caddy_proxy
+      - cloudflare-tunnel-net
+
+  documentserver:
+    image: onlyoffice/documentserver:latest
+    container_name: education-onlyoffice
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+      JWT_HEADER: Authorization
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+      ALLOW_META_IP_ADDRESS: "true"
+    ports:
+      - "22239:80"
+    volumes:
+      - ${ONLYOFFICE_DIR:-/volume3/education_planner/onlyoffice/data}:/var/www/onlyoffice/Data
+      - ${ONLYOFFICE_DIR:-/volume3/education_planner/onlyoffice}/lib:/var/lib/onlyoffice
+      - ${ONLYOFFICE_DIR:-/volume3/education_planner/onlyoffice}/log:/var/log/onlyoffice
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - default
+      - caddy_proxy
+      - cloudflare-tunnel-net
+
+networks:
+  caddy_proxy:
+    external: true
+  cloudflare-tunnel-net:
+    external: true
+
+volumes:
+  db_data:
