@@ -3,6 +3,8 @@ import { GraduationCap } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
+const isDemo = new URLSearchParams(window.location.search).has('demo');
+
 export function LoginPage() {
   const { login, register } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -57,7 +59,7 @@ export function LoginPage() {
           </p>
 
           <div className="pill-nav mb-4 w-full">
-            {(['login', 'register'] as const).map((m) => (
+            {(isDemo ? (['login'] as const) : (['login', 'register'] as const)).map((m) => (
               <button
                 key={m}
                 type="button"

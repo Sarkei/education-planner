@@ -160,3 +160,25 @@ authRouter.delete('/users/:id', requireAuth, requireAdmin, async (req: AuthReque
   await pool.query('DELETE FROM users WHERE id = $1', [id]);
   res.json({ ok: true });
 });
+
+
+/** Demo-Zugang für die Portfolio-Seite: meldet ausschließlich das Demo-Konto an. */
+authRouter.get('/demo', async (_req, res) => {
+  try {
+    const { rows } = await pool.query<{ id: number; email: string; name: string; role: string; token_version: number }>(
+      "SELECT id, email, name, role, token_version FROM users WHERE lower(email) = 'demo@example.com' LIMIT 1",
+    );
+    if (rows.length === 0) {
+      fail(res, 404, 'demo-unavailable', 'Demo ist nicht eingerichtet.');
+      return;
+    }
+    const u = rows[0];
+    res.json({
+      token: signToken(u),
+      user: { id: u.id, email: u.email, name: u.name, role: u.role },
+    });
+  } catch (e) {
+    console.error('[auth/demo]', e);
+    fail(res, 500, 'demo-failed', 'Demo konnte nicht geladen werden.');
+  }
+});
