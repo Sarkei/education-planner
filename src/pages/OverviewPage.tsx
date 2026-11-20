@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth';
 import { navigate } from '../App';
 import { Tree } from '../components/Tree';
 import { Band, PageHead, Shell, StatRow } from '../components/Shell';
+import { DetailSheet, StatButton, type DetailDef } from '../components/DetailSheet';
 import type { NodeItem } from '../lib/types';
 
 type SharedRow = { id: string; name: string; kind: 'folder' | 'file'; permission: 'view' | 'edit'; owner_name: string };
@@ -34,6 +35,7 @@ export function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState<DetailDef | null>(null);
 
   const load = useCallback(async () => {
     const [tree, shares, bin] = await Promise.allSettled([
@@ -53,13 +55,61 @@ export function OverviewPage() {
   }, [load]);
 
   const stats = useMemo(() => {
-    const files = nodes.filter((node) => node.kind === 'file').length;
-    const folders = nodes.filter((node) => node.kind === 'folder').length;
+    const dateien = nodes.filter((node) => node.kind === 'file');
+    const ordner = nodes.filter((node) => node.kind === 'folder');
+
+    const alter = (iso: string) => {
+      const t = new Date(iso).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
+
     return [
-      { value: loading ? '—' : String(files), label: 'Dateien' },
-      { value: loading ? '—' : String(folders), label: 'Ordner' },
-      { value: loading ? '—' : String(shared.length), label: 'Freigaben' },
-      { value: loading ? '—' : String(trash.length), label: 'Im Papierkorb' },
+      {
+        value: loading ? '—' : String(dateien.length),
+        label: 'Dateien',
+        detail: {
+          titel: 'Dateien',
+          hinweis: 'Alle Dateien, neueste zuerst. Ein Klick auf den Namen zeigt den Eintrag.',
+          hoeherBesser: true,
+          laden: async () =>
+            [...dateien]
+              .sort((a, b) => alter(b.updatedAt) - alter(a.updatedAt))
+              .map((n) => ({
+                label: `${n.name} · ${new Date(n.updatedAt).toLocaleDateString('de-DE')}`,
+                wert: 1,
+              })),
+        },
+      },
+      {
+        value: loading ? '—' : String(ordner.length),
+        label: 'Ordner',
+        detail: {
+          titel: 'Ordner',
+          hinweis: 'Ordnerstruktur mit Anzahl der Einträge.',
+          hoeherBesser: true,
+          laden: async () => ordner.map((n) => ({ label: n.name, wert: 1 })),
+        },
+      },
+      {
+        value: loading ? '—' : String(shared.length),
+        label: 'Freigaben',
+        detail: {
+          titel: 'Freigaben',
+          hinweis: 'Was andere für dich freigegeben haben.',
+          laden: async () =>
+            shared.map((s) => ({ label: `${s.name} · ${s.owner_name} (${s.permission})`, wert: 1 })),
+        },
+      },
+      {
+        value: loading ? '—' : String(trash.length),
+        label: 'Im Papierkorb',
+        detail: {
+          titel: 'Im Papierkorb',
+          hinweis: 'Gelöschte Einträge, die noch wiederhergestellt werden können.',
+          hoeherBesser: false,
+          laden: async () => trash.map((t) => ({ label: t.name, wert: 1 })),
+        },
+      },
     ];
   }, [nodes, shared, trash, loading]);
 
@@ -137,7 +187,11 @@ export function OverviewPage() {
           </button>
         }
       >
-        <StatRow items={stats} />
+        <dl className="stat-row">
+          {stats.map((s) => (
+            <StatButton key={s.label} value={s.value} label={s.label} onClick={() => setDetail(s.detail)} />
+          ))}
+        </dl>
       </PageHead>
 
       <section className="app-section app-container">
@@ -253,6 +307,8 @@ export function OverviewPage() {
           <p className="alert-danger text-xs">{error}</p>
         </section>
       ) : null}
+
+      {detail && <DetailSheet def={detail} onClose={() => setDetail(null)} />}
     </Shell>
   );
 }
