@@ -1,0 +1,207 @@
+/* ==========================================================================
+   Arbeitsbereich (Dateien + Editor) — OneNote-artiges Split-Layout.
+
+   Aufbau:
+     .ws                Vollflächiger Rahmen unter der Kopfzeile, kein 1360-px-Deckel.
+     .ws__tree          Fester Ordnerbaum links (eigene Scrollfläche).
+     .ws__main          Inhalt rechts: Liste ODER Editor.
+     .ws__panel         Kopf des rechten Bereichs (Brotkrumen, Aktionen).
+
+   Regeln, die hier bewusst gelten:
+   - Der Baum steht auf Desktop dauerhaft links und wird beim Öffnen einer Datei
+     NICHT durch eine andere Seite ersetzt — der Editor erscheint rechts daneben.
+   - Ordner auf-/zuklappen ist eine reine Anzeige-Entscheidung; die Auswahl eines
+     Ordners oder einer Datei ändert den Aufklapp-Zustand nicht.
+   - Keine Hex-Werte, nur Tokens, damit Hell/Dunkel automatisch folgt.
+   ========================================================================== */
+
+.ws {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  background: var(--bg);
+}
+
+@media (min-width: 900px) {
+  .ws {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1500px) {
+  .ws {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+}
+
+/* --- Baumspalte ------------------------------------------------------- */
+.ws__tree {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  position: sticky;
+  top: 64px;
+  height: calc(100vh - 64px);
+}
+
+@media (min-width: 900px) {
+  .ws__tree { display: flex; }
+}
+
+.ws__tree-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ws__tree-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ws__tree-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 6px 24px;
+}
+
+.ws__tree-group {
+  margin: 10px 0 2px;
+  padding-inline: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- Hauptspalte ------------------------------------------------------ */
+.ws__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ws__panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  position: sticky;
+  top: 64px;
+  z-index: 10;
+}
+
+.ws__panel-spacer { margin-left: auto; }
+
+.ws__body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+/* Editor füllt den Bereich ohne eigene Innenabstände. */
+.ws__body--flush { padding: 0; overflow: hidden; }
+
+/* --- Dateiliste ------------------------------------------------------- */
+.ws-list { display: flex; flex-direction: column; gap: 6px; max-width: none; }
+
+.ws-drop-active {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  border-radius: 10px;
+}
+
+/* --- Editor-Bereich --------------------------------------------------- */
+.ws-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: calc(100vh - 118px);
+}
+
+.ws-editor__frame {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  width: 100%;
+  background: #fff;
+}
+
+.ws-editor__text {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 16px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ws-editor__media {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  padding: 16px;
+}
+
+.ws-editor__media img,
+.ws-editor__media video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Speicherleiste unter Textdateien */
+.ws-savebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.ws-savebar > span:first-child { margin-right: auto; }
+
+/* Leerzustand im rechten Bereich */
+.ws-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* Mobil: Baum als Overlay-Karte, volle Breite */
+@media (max-width: 899px) {
+  .ws { min-height: calc(100vh - 56px); }
+  .ws__panel { position: static; }
+  .ws__body { padding: 12px; }
+}
