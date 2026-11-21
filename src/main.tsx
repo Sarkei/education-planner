@@ -4,6 +4,7 @@ import { App } from './App';
 import { getToken, setToken } from './lib/api';
 import { isDemoRequest, markDemo } from './lib/demo';
 import './styles.css';
+import { starteSichtbareHoehe } from './lib/vvHeight';
 
 /** Demo-Betrieb über demo-*-Domain oder ?demo=1: anonymes Beispielkonto holen. */
 async function startDemo(): Promise<boolean> {
@@ -26,6 +27,9 @@ async function boot(): Promise<void> {
   if (isDemoRequest() && !getToken()) {
     await startDemo();
   }
+
+// Sichtbare Hoehe als CSS-Variable (Tastatur auf dem Handy).
+starteSichtbareHoehe();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
