@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
-import { FilesPage } from './pages/FilesPage';
-import { EditorPage } from './pages/EditorPage';
-import { AdminPage } from './pages/AdminPage';
-import { TrashPage } from './pages/TrashPage';
-import { SearchPage } from './pages/SearchPage';
-import { SharedPage } from './pages/SharedPage';
+import { lazy, Suspense } from 'react';
+
+// Selten genutzte Seiten erst laden, wenn sie geoeffnet werden.
+// Das haelt das Start-Bundle klein - Editor und Admin braucht niemand beim ersten Aufruf.
+const FilesPage = lazy(() => import('./pages/FilesPage').then(m => ({ default: m.FilesPage })));
+const EditorPage = lazy(() => import('./pages/EditorPage').then(m => ({ default: m.EditorPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const TrashPage = lazy(() => import('./pages/TrashPage').then(m => ({ default: m.TrashPage })));
+const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default: m.SearchPage })));
+const SharedPage = lazy(() => import('./pages/SharedPage').then(m => ({ default: m.SharedPage })));
 
 function useHashRoute(): string {
   const [route, setRoute] = useState(() => location.hash || '#/');
@@ -28,6 +32,7 @@ function Router() {
   }
   if (!user) return <LoginPage />;
 
+  const seite = (() => {
   if (route.startsWith('#/edit/')) return <EditorPage nodeId={route.replace('#/edit/', '')} />;
   if (route.startsWith('#/files')) {
     const folder = route.startsWith('#/files/') ? route.slice('#/files/'.length) : null;
@@ -38,6 +43,13 @@ function Router() {
   if (route.startsWith('#/trash')) return <TrashPage />;
   if (route.startsWith('#/users')) return <AdminPage />;
   return <OverviewPage />;
+  })();
+
+  return (
+    <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-sm text-muted">Lädt …</div>}>
+      {seite}
+    </Suspense>
+  );
 }
 
 export function App() {
