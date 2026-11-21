@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export function Modal({
   title,
@@ -14,7 +15,7 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
-  return (
+  const inhalt = (
     <div className="overlay fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         className={`card w-full ${wide ? 'max-w-2xl' : 'max-w-md'} p-5`}
@@ -33,4 +34,7 @@ export function Modal({
       </div>
     </div>
   );
+
+  // Portal: haengt am <body>, damit der Dialog die Seite nicht verschiebt.
+  return typeof document === 'undefined' ? inhalt : createPortal(inhalt, document.body);
 }
