@@ -21,6 +21,23 @@ const AUDIO_EXT = ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'flac', 'aac'];
 const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'mkv'];
 
 export function EditorPage({ nodeId }: { nodeId: string }) {
+  // Der Editor nimmt die volle Hoehe ein. Auf dem Handy muss er der *sichtbaren*
+  // Flaeche folgen, sonst liegt die Tastatur ueber dem Text.
+  const [sichtbareHoehe, setSichtbareHoehe] = useState<number | null>(null);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const aktualisieren = () => setSichtbareHoehe(Math.round(vv.height));
+    aktualisieren();
+    vv.addEventListener('resize', aktualisieren);
+    vv.addEventListener('scroll', aktualisieren);
+    return () => {
+      vv.removeEventListener('resize', aktualisieren);
+      vv.removeEventListener('scroll', aktualisieren);
+    };
+  }, []);
+
   const [node, setNode] = useState<NodeItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(true);
@@ -144,7 +161,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
   if (error) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
         <ShieldAlert className="h-6 w-6 text-[var(--danger)]" />
         <p className="text-sm font-medium text-[var(--danger)]">{error}</p>
         <button className="btn btn-ghost" onClick={() => navigate('#/files')}>
@@ -156,7 +173,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
   if (!node) {
     return (
-      <div className="flex h-screen items-center justify-center gap-2 text-sm text-muted">
+      <div className="flex min-h-[60vh] items-center justify-center gap-2 text-sm text-muted">
         <Loader2 className="h-4 w-4 animate-spin" /> Datei wird geöffnet …
       </div>
     );
@@ -165,7 +182,10 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
   const canEdit = node.permission !== 'view';
 
   return (
-    <div className="flex h-screen flex-col">
+    <div
+      className="flex flex-col"
+      style={{ height: sichtbareHoehe ? `${sichtbareHoehe}px` : 'var(--vv-height, 100dvh)' }}
+    >
       <header className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-2.5">
         <button className="btn btn-ghost !px-2 !py-1.5" onClick={() => navigate('#/files')} title="Zurück">
           <ArrowLeft className="h-4 w-4" />
