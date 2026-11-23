@@ -3,13 +3,12 @@ import { GraduationCap, LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { navigate } from '../App';
 
-export type SectionId = 'overview' | 'files' | 'shared' | 'search' | 'trash' | 'users';
+export type SectionId = 'files' | 'shared' | 'search' | 'trash' | 'users';
 
 type Section = { id: SectionId; label: string; hash: string; adminOnly?: boolean };
 
 const SECTIONS: Section[] = [
-  { id: 'overview', label: 'Übersicht', hash: '#/' },
-  { id: 'files', label: 'Dateien', hash: '#/files' },
+  { id: 'files', label: 'Dateien', hash: '#/' },
   { id: 'shared', label: 'Freigaben', hash: '#/shared' },
   { id: 'search', label: 'Suche', hash: '#/search' },
   { id: 'trash', label: 'Papierkorb', hash: '#/trash' },
@@ -28,7 +27,7 @@ export function Shell({ tab, children }: { tab: SectionId; children: ReactNode }
 
   const items = SECTIONS.filter((item) => !item.adminOnly || user?.role === 'admin');
   const active = items.find((item) => item.id === tab);
-  const subtitle = active?.label ?? 'Übersicht';
+  const subtitle = active?.label ?? 'Dateien';
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';

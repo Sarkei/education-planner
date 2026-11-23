@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { LoginPage } from './pages/LoginPage';
-import { OverviewPage } from './pages/OverviewPage';
 import { lazy, Suspense } from 'react';
 
 // Selten genutzte Seiten erst laden, wenn sie geoeffnet werden.
@@ -42,7 +41,8 @@ function Router() {
   if (route.startsWith('#/search')) return <SearchPage />;
   if (route.startsWith('#/trash')) return <TrashPage />;
   if (route.startsWith('#/users')) return <AdminPage />;
-  return <OverviewPage />;
+  // Startseite sind die Dateien: eine Übersichtsseite davor zeigte nur, was dort schon steht.
+  return <FilesPage key="root-start" initialFolder={null} />;
   })();
 
   return (
