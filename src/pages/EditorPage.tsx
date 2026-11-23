@@ -171,7 +171,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="min-w-0">
-          <p className="truncate text-[13.5px] font-semibold">{node.name}</p>
+          <p className="truncate text-[12px] font-semibold">{node.name}</p>
           <p className="text-[11px] text-muted">
             {canEdit ? 'bearbeitbar' : 'nur ansehen'} · Version {node.version}
           </p>
@@ -218,7 +218,7 @@ export function EditorPage({ nodeId }: { nodeId: string }) {
 
       {isText ? (
         <textarea
-          className="scroll-thin min-h-0 flex-1 resize-none border-0 bg-[var(--bg)] p-6 font-mono text-[13px] leading-relaxed outline-none"
+          className="scroll-thin min-h-0 flex-1 resize-none border-0 bg-[var(--bg)] p-6 font-mono text-[12px] leading-relaxed outline-none"
           value={text ?? ''}
           readOnly={!canEdit}
           onChange={(e) => {

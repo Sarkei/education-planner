@@ -79,7 +79,7 @@ export function SearchPage() {
           )}
 
           {query.trim().length < 2 ? (
-            <p className="text-[13px] text-muted">Mindestens zwei Zeichen eingeben.</p>
+            <p className="text-[12px] text-muted">Mindestens zwei Zeichen eingeben.</p>
           ) : hits.length === 0 && searched && !busy ? (
             <EmptyState title="Nichts gefunden" hint={`Kein Treffer für „${query.trim()}“. Andere Schreibweise probieren?`} />
           ) : (
@@ -92,7 +92,7 @@ export function SearchPage() {
                 >
                   {hit.kind === 'folder' ? <Folder className="h-[18px] w-[18px] text-[var(--accent)]" /> : <FileText className="h-[18px] w-[18px] text-muted" />}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-medium">{hit.name}</p>
+                    <p className="truncate text-[12px] font-medium">{hit.name}</p>
                     <p className="truncate text-[11px] text-muted">
                       {hit.match === 'content' ? hit.snippet : hit.kind === 'folder' ? 'Ordner' : 'Dateiname'}
                     </p>

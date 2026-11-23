@@ -438,7 +438,7 @@ export function FilesPage() {
               }
             />
 
-            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px]">
+            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px]">
               <button
                 className="btn btn-ghost !px-2 !py-1"
                 onClick={() => setSelectedFolder(breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].id : null)}
@@ -538,7 +538,7 @@ export function FilesPage() {
                         )}
                       </div>
                       <div className="border-t border-[var(--line)] px-2.5 py-2">
-                        <p className="truncate text-[12.5px] font-medium">{node.name}</p>
+                        <p className="truncate text-[11.5px] font-medium">{node.name}</p>
                         <p className="text-[10.5px] text-muted">
                           {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
                         </p>
@@ -585,7 +585,7 @@ export function FilesPage() {
                   >
                     {iconFor(node)}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-medium" title={node.name}>
+                      <p className="truncate text-[12px] font-medium" title={node.name}>
                         {node.name}
                       </p>
                       <p className="text-[11px] text-muted">

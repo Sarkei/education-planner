@@ -54,7 +54,7 @@ export function TrashPage() {
                 <div key={item.id} className="row-item">
                   {item.kind === 'folder' ? <Folder className="h-[18px] w-[18px] text-[var(--accent)]" /> : <FileIcon className="h-[18px] w-[18px] text-muted" />}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-medium">{item.name}</p>
+                    <p className="truncate text-[12px] font-medium">{item.name}</p>
                     <p className="text-[11px] text-muted">gelöscht am {new Date(item.trashedAt).toLocaleDateString('de-DE')}</p>
                   </div>
                   <button className="btn btn-ghost !py-1 text-xs" onClick={() => void restore(item.id)}>

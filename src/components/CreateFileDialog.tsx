@@ -67,7 +67,7 @@ export function CreateFileDialog({
                 }`}
               >
                 <Icon className="h-4 w-4 text-[var(--accent)]" />
-                <span className="text-[13px] font-medium">{k.label}</span>
+                <span className="text-[12px] font-medium">{k.label}</span>
                 <span className="text-[10.5px] text-muted">{k.hint}</span>
               </button>
             );

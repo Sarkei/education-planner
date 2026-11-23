@@ -76,7 +76,7 @@ export function AdminPage() {
                     {u.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-medium">{u.name}</p>
+                    <p className="truncate text-[12px] font-medium">{u.name}</p>
                     <p className="truncate text-[11px] text-muted">{u.email}</p>
                   </div>
                   <span className="badge">{u.role === 'admin' ? 'Administrator' : 'Nutzer'}</span>

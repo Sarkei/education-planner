@@ -52,7 +52,7 @@ export function LoginPage() {
         </div>
 
         <div className="card p-5">
-          <p className="mb-4 text-[13px] text-muted">
+          <p className="mb-4 text-[12px] text-muted">
             {needsSetup
               ? 'Erster Start: Das erste Konto wird Administrator.'
               : 'Melde dich an, um deine Ordner und Dokumente zu öffnen.'}

@@ -84,7 +84,7 @@ export function PageHead({
       <div>
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1 className="serif mt-0.5 text-2xl leading-tight sm:text-[28px]">{title}</h1>
-        {hint && <p className="mt-1 text-[13px] text-muted">{hint}</p>}
+        {hint && <p className="mt-1 text-[12px] text-muted">{hint}</p>}
       </div>
       {action}
     </div>
@@ -95,7 +95,7 @@ export function EmptyState({ title, hint, action }: { title: string; hint: strin
   return (
     <div className="card flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
       <p className="serif text-lg">{title}</p>
-      <p className="max-w-sm text-[13px] text-muted">{hint}</p>
+      <p className="max-w-sm text-[12px] text-muted">{hint}</p>
       {action}
     </div>
   );

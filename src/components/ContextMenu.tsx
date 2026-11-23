@@ -49,7 +49,7 @@ export function ContextMenu({ x, y, entries, onClose }: { x: number; y: number; 
         ) : (
           <button
             key={entry.label}
-            className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] hover:bg-[var(--accent-soft)] disabled:opacity-40 ${
+            className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] hover:bg-[var(--accent-soft)] disabled:opacity-40 ${
               entry.danger ? 'text-[var(--danger)]' : ''
             }`}
             disabled={entry.disabled}
