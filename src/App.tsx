@@ -6,6 +6,7 @@ import { EditorPage } from './pages/EditorPage';
 import { AdminPage } from './pages/AdminPage';
 import { TrashPage } from './pages/TrashPage';
 import { SearchPage } from './pages/SearchPage';
+import { BenachrichtigungenPage } from './pages/BenachrichtigungenPage';
 
 function useHashRoute(): string {
   const [route, setRoute] = useState(() => location.hash || '#/files');
@@ -29,6 +30,7 @@ function Router() {
   if (route.startsWith('#/edit/')) return <EditorPage nodeId={route.replace('#/edit/', '')} />;
   if (route.startsWith('#/search')) return <SearchPage />;
   if (route.startsWith('#/trash')) return <TrashPage />;
+  if (route.startsWith('#/benachrichtigungen')) return <BenachrichtigungenPage />;
   if (route.startsWith('#/users')) return <AdminPage />;
   return <FilesPage />;
 }

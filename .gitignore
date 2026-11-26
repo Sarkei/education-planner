@@ -11,3 +11,6 @@ desktop.ini
 .trash/
 .vscode/
 .idea/
+
+# VAPID-Schlüssel (Push) — gehören nicht ins Repo, liegen im Container unter /app/push-keys.env
+push-keys.env

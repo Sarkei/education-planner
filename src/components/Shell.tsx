@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Files, LogOut, Moon, Search, Sun, Trash2, Users } from 'lucide-react';
+import { Bell, Files, LogOut, Moon, Search, Sun, Trash2, Users } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { navigate } from '../App';
 
@@ -53,6 +53,13 @@ export function Shell({ tab, children }: { tab: Tab; children: ReactNode }) {
 
           <div className="flex items-center gap-1.5">
             <span className="hidden text-[11px] text-muted md:inline">{user?.name}</span>
+            <button
+              className="btn btn-ghost !px-2 !py-1.5"
+              onClick={() => navigate('#/benachrichtigungen')}
+              title="Benachrichtigungen"
+            >
+              <Bell className="h-4 w-4" />
+            </button>
             <button className="btn btn-ghost !px-2 !py-1.5" onClick={toggleTheme} title="Design wechseln">
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>

@@ -2,6 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from './db';
 import { canWrite, fail, nodeAccess, requireAuth, type AuthRequest } from './guards';
+import { benachrichtige } from './benachrichtigungen';
+import { sendePushAnNutzer } from './push-route';
+
+/** Versand an einen Nutzer in der Form, die `benachrichtige` erwartet. */
+const sendeAn =
+  (nutzerId: number | string) =>
+  (n: { titel: string; text: string; url?: string; tag?: string; dringend?: boolean }) =>
+    sendePushAnNutzer(pool, nutzerId, n);
 
 export const sharesRouter = Router();
 
@@ -43,6 +51,34 @@ sharesRouter.post('/:id', requireAuth, async (req: AuthRequest, res) => {
      ON CONFLICT (node_id, user_id) DO UPDATE SET permission = EXCLUDED.permission`,
     [req.params.id, parsed.data.userId, parsed.data.permission],
   );
+
+  /*
+   * Den neuen Mitleser benachrichtigen — bisher erfuhr er es nur zufällig,
+   * wenn er die Freigaben selbst nachsah.
+   */
+  try {
+    const wer = await pool.query<{ name: string }>('SELECT name FROM users WHERE id = $1', [req.userId!]);
+    const datei = await pool.query<{ name: string; kind: string }>(
+      'SELECT name, kind FROM nodes WHERE id = $1',
+      [req.params.id],
+    );
+    const n = datei.rows[0];
+    if (n) {
+      await benachrichtige(pool, sendeAn(parsed.data.userId), parsed.data.userId, {
+        kategorie: 'erinnerung',
+        ereignis: 'freigabe',
+        schluessel: `${req.params.id}-${parsed.data.permission}`,
+        titel: 'Für dich freigegeben',
+        text: `${wer.rows[0]?.name ?? 'Jemand'} hat „${n.name}" für dich ${parsed.data.permission === 'edit' ? 'zum Bearbeiten' : 'zum Ansehen'} freigegeben.`,
+        url: `https://education.nas-timgreen.com/#/file/${req.params.id}`,
+        tag: 'freigabe',
+        dringend: true,
+      });
+    }
+  } catch (e) {
+    console.error('[push] Freigabe-Meldung:', (e as Error).message);
+  }
+
   res.json({ ok: true });
 });
 
