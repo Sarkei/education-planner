@@ -1,35 +1,22 @@
+/* === FARBEN AUS DEM KIT (knowledge/design-system/kit) === */
+@import './design/farben.css';
+/* Farben kommen ab hier aus knowledge/design-system/kit/paletten.json.
+   Das Gerüst (geruest.css) bleibt bewusst draußen — diese App hat eigene Komponenten. */
+
 @import 'tailwindcss';
 
 /* Palette und Typografie wie im Meal-Planner/Fitness-Tracker: ruhiges Salbeigrün,
    Serifenschrift für Überschriften, feine Kanten statt Schatten. */
 :root {
-  --bg: #0e1512;
   --bg-soft: #131d19;
-  --card: #16211c;
   --card-2: #1a2721;
-  --text: #e8efe9;
-  --muted: #9db0a6;
-  --line: #26332d;
-  --accent: #4fbf8b;
-  --accent-ink: #08150f;
-  --accent-soft: rgba(79, 191, 139, 0.14);
-  --danger: #f08a7a;
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
   color-scheme: dark;
 }
 
 [data-theme='light'] {
-  --bg: #f4f2ea;
   --bg-soft: #ece9df;
-  --card: #ffffff;
   --card-2: #f7f5ee;
-  --text: #16281f;
-  --muted: #5d6b62;
-  --line: #ddd8ca;
-  --accent: #1f6f4a;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(31, 111, 74, 0.1);
-  --danger: #b3261e;
   color-scheme: light;
 }
 

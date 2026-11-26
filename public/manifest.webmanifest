@@ -1,10 +1,10 @@
 {
   "name": "Education Planner",
   "short_name": "Education",
-  "description": "Unterlagen und Dokumente für die Berufsschule — Ordnerbaum, Office-Editor, Freigaben.",
+  "description": "Education Planner — eigene App.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0e1512",
+  "background_color": "#0e1211",
   "theme_color": "#101312",
   "lang": "de",
   "icons": [
@@ -21,9 +21,16 @@
       "purpose": "any"
     },
     {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png"
     }
-  ]
+  ],
+  "_hinweis": "Akzent dieser App: #6b93c4 — steht in kit/paletten.json"
 }
