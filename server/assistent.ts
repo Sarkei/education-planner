@@ -15,7 +15,8 @@ import path from 'node:path';
 import { pool } from './db';
 import { absolute, saveVersion, writeAtomic, TRASH_ROOT } from './storage';
 import { lesePdf, schreibePdf, leseZeichnungen, rendereSeite, leseFormularfelder, leseTabellen, leseKaestchen } from './pdfkit';
-import { mimeFor } from './templates';
+import { mimeFor, emptyFileFor } from './templates';
+import { extractText } from './extract';
 
 type Provider = { name: string; apiKey: string; baseUrl: string; model: string };
 
@@ -262,11 +263,25 @@ async function toolLesen(args: Record<string, unknown>, ctx: Kontext): Promise<s
       return inhalt.length > 12000 ? `${inhalt.slice(0, 12000)}\n… (gekürzt)` : inhalt;
     }
 
-    if (['docx', 'xlsx', 'pptx'].includes(ext)) {
+    if (['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'doc', 'xls'].includes(ext)) {
+      // Immer die Datei selbst lesen, nicht den Index: der Index hinkt hinterher,
+      // solange der Editor nicht gespeichert hat. extractText liest direkt.
+      try {
+        const frisch = await extractText(pfad, String(datei.name));
+        if (frisch && frisch.trim()) {
+          return `Inhalt von „${datei.name}" (direkt aus der Datei gelesen):\n${frisch.slice(0, 9000)}${
+            frisch.length > 9000 ? '\n… (gekürzt)' : ''
+          }`;
+        }
+      } catch {
+        /* fällt auf den Index zurück */
+      }
       const { rows } = await pool.query('SELECT content FROM node_texts WHERE node_id = $1', [datei.id]);
       const text = rows[0]?.content;
-      if (text && String(text).trim()) return `Inhalt von „${datei.name}":\n${String(text).slice(0, 8000)}`;
-      return `„${datei.name}" ist ein ${ext.toUpperCase()}-Dokument ohne extrahierten Text. Nutze bearbeite_office, um es zu ändern.`;
+      if (text && String(text).trim()) {
+        return `Inhalt von „${datei.name}" (aus dem Suchindex — die Datei selbst war nicht lesbar):\n${String(text).slice(0, 8000)}`;
+      }
+      return `„${datei.name}" ist ein ${ext.toUpperCase()}-Dokument und hat keinen lesbaren Text.`;
     }
     return `„${datei.name}" (${ext}) lässt sich nicht als Text lesen. Herunterladen oder per Bild ansehen ist möglich.`;
   } catch (e) {
@@ -734,6 +749,302 @@ async function toolAufLinie(args: Record<string, unknown>, ctx: Kontext): Promis
   return `Linie ${linie} beschrieben${ergebnis.hinweise.length ? ` — ${ergebnis.hinweise.join('; ')}` : ''}.`;
 }
 
+
+/** Sucht einen Knoten nach Namen; meldet Mehrdeutigkeit. */
+async function findeEindeutig(name: string, ctx: Kontext, nurDatei = false): Promise<{ knoten?: Record<string, unknown>; fehler?: string }> {
+  const knoten = await ladeBaum(ctx.userId);
+  const treffer = knoten.filter(
+    (n) => String(n.name).toLowerCase() === name.toLowerCase() && (!nurDatei || n.kind === 'file'),
+  );
+  if (!treffer.length) return { fehler: `„${name}" nicht gefunden.` };
+  if (treffer.length > 1) return { fehler: `„${name}" ist mehrdeutig (${treffer.length} Treffer).` };
+  return { knoten: treffer[0] };
+}
+
+/** Werkzeug: Office-Dokument (Word/Excel/PowerPoint) oder anderes leeres Dokument anlegen. */
+async function toolDokument(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const name = String(args.name ?? '').trim();
+  const elternName = args.eltern ? String(args.eltern).trim() : '';
+  if (!name) return 'Kein Dateiname angegeben.';
+
+  const ext = endung(name);
+  const erlaubt = ['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp', 'txt', 'md', 'csv'];
+  if (!erlaubt.includes(ext)) {
+    return `Endung „.${ext}" wird nicht unterstützt. Möglich: ${erlaubt.join(', ')}.`;
+  }
+
+  let parentId: string | null = null;
+  let elternPfad = '';
+  if (elternName) {
+    const e = await findeEindeutig(elternName, ctx);
+    if (e.fehler) return `Elternordner: ${e.fehler}`;
+    if (e.knoten!.kind !== 'folder') return `„${elternName}" ist ein Ordner, keine Datei — als Eltern ungeeignet.`;
+    if (!(await darfSchreiben(String(e.knoten!.id), ctx.userId))) return `Kein Schreibrecht auf „${elternName}".`;
+    parentId = String(e.knoten!.id);
+    elternPfad = String(e.knoten!.storage_path ?? '');
+  }
+
+  const vorhanden = await pool.query(
+    'SELECT id FROM nodes WHERE parent_id IS NOT DISTINCT FROM $1 AND lower(name) = lower($2)',
+    [parentId, name],
+  );
+  if (vorhanden.rows.length) return `„${name}" gibt es dort schon.`;
+
+  const inhalt = await emptyFileFor(name);
+  const storagePfad = elternPfad ? `${elternPfad}/${name}` : name;
+  await writeAtomic(absolute(storagePfad), inhalt);
+
+  const id = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO nodes (id, parent_id, name, kind, storage_path, mime, size, owner_id, position)
+     VALUES ($1,$2,$3,'file',$4,$5,$6,$7,
+             coalesce((select max(position)+1 from nodes where parent_id is not distinct from $2), 0))`,
+    [id, parentId, name, storagePfad, mimeFor(name), inhalt.length, ctx.userId],
+  );
+  return `„${name}" angelegt (${inhalt.length} Bytes)${elternName ? ` in „${elternName}"` : ''}. Öffnet sich im Editor.`;
+}
+
+/** Werkzeug: Datei oder Ordner kopieren. */
+async function toolKopieren(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const was = String(args.was ?? '').trim();
+  const nach = args.nach ? String(args.nach).trim() : '';
+  if (!was) return 'Kein Name angegeben.';
+
+  const g = await findeEindeutig(was, ctx);
+  if (g.fehler) return g.fehler;
+  const quelle = g.knoten!;
+  if (!(await darfSchreiben(String(quelle.id), ctx.userId))) return `Kein Schreibrecht auf „${was}".`;
+
+  let zielParent: string | null = null;
+  let zielPfad = '';
+  if (nach) {
+    const z = await findeEindeutig(nach, ctx);
+    if (z.fehler) return `Zielordner: ${z.fehler}`;
+    if (z.knoten!.kind !== 'folder') return `„${nach}" ist kein Ordner.`;
+    if (!(await darfSchreiben(String(z.knoten!.id), ctx.userId))) return `Kein Schreibrecht auf „${nach}".`;
+    zielParent = String(z.knoten!.id);
+    zielPfad = String(z.knoten!.storage_path ?? '');
+  }
+
+  // Namen entdoppeln
+  let neuerName = String(quelle.name);
+  let zaehler = 2;
+  for (;;) {
+    const belegt = await pool.query(
+      'SELECT 1 FROM nodes WHERE parent_id IS NOT DISTINCT FROM $1 AND lower(name) = lower($2)',
+      [zielParent, neuerName],
+    );
+    if (!belegt.rows.length) break;
+    const punkt = String(quelle.name).lastIndexOf('.');
+    neuerName =
+      punkt > 0
+        ? `${String(quelle.name).slice(0, punkt)} (${zaehler})${String(quelle.name).slice(punkt)}`
+        : `${quelle.name} (${zaehler})`;
+    zaehler++;
+    if (zaehler > 99) return 'Konnte keinen freien Namen finden.';
+  }
+
+  const neuerStorage = zielPfad ? `${zielPfad}/${neuerName}` : neuerName;
+  const altAbsolut = absolute(String(quelle.storage_path ?? ''));
+  const neuAbsolut = absolute(neuerStorage);
+  try {
+    if (fs.existsSync(altAbsolut)) {
+      fs.mkdirSync(path.dirname(neuAbsolut), { recursive: true });
+      fs.cpSync(altAbsolut, neuAbsolut, { recursive: true });
+    }
+  } catch (e) {
+    return `Kopieren im Speicher fehlgeschlagen: ${e instanceof Error ? e.message : 'unbekannt'}`;
+  }
+
+  const neueId = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO nodes (id, parent_id, name, kind, storage_path, mime, size, owner_id, position)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
+             coalesce((select max(position)+1 from nodes where parent_id is not distinct from $2), 0))`,
+    [neueId, zielParent, neuerName, quelle.kind, neuerStorage, quelle.mime, quelle.size, ctx.userId],
+  );
+
+  // Unterordner/Dateien mitkopieren (nur bei Ordnern)
+  if (quelle.kind === 'folder') {
+    await pool.query(
+      `WITH RECURSIVE unter AS (
+          SELECT id, parent_id, name, kind, storage_path, mime, size FROM nodes WHERE parent_id = $1
+          UNION ALL
+          SELECT n.id, n.parent_id, n.name, n.kind, n.storage_path, n.mime, n.size
+            FROM nodes n JOIN unter u ON n.parent_id = u.id
+        )
+        INSERT INTO nodes (id, parent_id, name, kind, storage_path, mime, size, owner_id, position)
+        SELECT gen_random_uuid(), NULL, name, kind,
+               replace(storage_path, $2, $3), mime, size, $4, 0
+          FROM unter`,
+      [quelle.id, String(quelle.storage_path), neuerStorage, ctx.userId],
+    );
+  }
+
+  return `„${was}" als „${neuerName}" kopiert${nach ? ` nach „${nach}"` : ''}.`;
+}
+
+/** Werkzeug: Datei mit anderem Inhalt teilen (Freigabe für Nutzer). */
+async function toolTeilen(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const was = String(args.was ?? '').trim();
+  const email = String(args.email ?? '').trim().toLowerCase();
+  const recht = String(args.recht ?? 'view').trim();
+  if (!was || !email) return 'Name und E-Mail werden gebraucht.';
+  if (!['view', 'edit'].includes(recht)) return 'Recht muss „view" oder „edit" sein.';
+
+  const g = await findeEindeutig(was, ctx);
+  if (g.fehler) return g.fehler;
+  const knoten = g.knoten!;
+  if (String(knoten.owner_id) !== String(ctx.userId)) return `Nur eigene Dateien lassen sich freigeben.`;
+
+  const nutzer = await pool.query('SELECT id, name FROM users WHERE lower(email) = $1', [email]);
+  if (!nutzer.rows.length) return `Kein Konto mit „${email}".`;
+  const ziel = nutzer.rows[0] as { id: number; name: string };
+  if (ziel.id === ctx.userId) return 'Das ist dein eigenes Konto.';
+
+  await pool.query(
+    `INSERT INTO shares (node_id, user_id, permission) VALUES ($1,$2,$3)
+     ON CONFLICT (node_id, user_id) DO UPDATE SET permission = EXCLUDED.permission`,
+    [knoten.id, ziel.id, recht],
+  );
+  return `„${was}" für ${ziel.name} freigegeben (${recht === 'edit' ? 'bearbeiten' : 'nur ansehen'}).`;
+}
+
+/** Werkzeug: Freigaben einer Datei anzeigen. */
+async function toolFreigaben(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const was = String(args.was ?? '').trim();
+  const g = await findeEindeutig(was, ctx);
+  if (g.fehler) return g.fehler;
+  const { rows } = await pool.query(
+    `SELECT u.name, u.email, s.permission FROM shares s
+       JOIN users u ON u.id = s.user_id WHERE s.node_id = $1 ORDER BY u.name`,
+    [g.knoten!.id],
+  );
+  if (!rows.length) return `„${was}" ist für niemanden freigegeben.`;
+  return rows
+    .map((r: { name: string; email: string; permission: string }) =>
+      `${r.name} (${r.email}) — ${r.permission === 'edit' ? 'bearbeiten' : 'nur ansehen'}`)
+    .join('\n');
+}
+
+/** Werkzeug: Versionsverlauf einer Datei. */
+async function toolVersionen(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const was = String(args.was ?? '').trim();
+  const g = await findeEindeutig(was, ctx, true);
+  if (g.fehler) return g.fehler;
+  const { rows } = await pool.query(
+    'SELECT version, size, created_at FROM file_versions WHERE node_id = $1 ORDER BY created_at DESC LIMIT 20',
+    [g.knoten!.id],
+  );
+  if (!rows.length) return `Für „${was}" gibt es noch keine gesicherten Fassungen (aktuell Version ${g.knoten!.version}).`;
+  return `Gesicherte Fassungen von „${was}" (aktuell Version ${g.knoten!.version}):\n${rows
+    .map((r: { version: number; size: number; created_at: string }) =>
+      `  Version ${r.version} — ${new Date(r.created_at).toLocaleString('de-DE')} — ${Math.round(Number(r.size) / 1024)} KB`)
+    .join('\n')}`;
+}
+
+/** Werkzeug: Papierkorb anzeigen. */
+async function toolPapierkorb(_args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const { rows } = await pool.query(
+    `SELECT name, kind, trashed_at FROM nodes
+      WHERE owner_id = $1 AND trashed_at IS NOT NULL ORDER BY trashed_at DESC LIMIT 50`,
+    [ctx.userId],
+  );
+  if (!rows.length) return 'Der Papierkorb ist leer.';
+  return `${rows.length} Einträge im Papierkorb:\n${rows
+    .map((r: { name: string; kind: string; trashed_at: string }) =>
+      `  ${r.kind === 'folder' ? '[Ordner]' : '[Datei] '} ${r.name} — ${new Date(r.trashed_at).toLocaleDateString('de-DE')}`)
+    .join('\n')}`;
+}
+
+/** Werkzeug: aus dem Papierkorb zurückholen. */
+async function toolWiederherstellen(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const was = String(args.was ?? '').trim();
+  if (!was) return 'Kein Name angegeben.';
+  const { rows } = await pool.query(
+    `SELECT id, name FROM nodes WHERE owner_id = $1 AND trashed_at IS NOT NULL AND lower(name) = lower($2)`,
+    [ctx.userId, was],
+  );
+  if (!rows.length) return `Im Papierkorb liegt nichts namens „${was}".`;
+  if (rows.length > 1) return `„${was}" ist im Papierkorb mehrdeutig (${rows.length} Treffer).`;
+  const k = rows[0] as { id: string; name: string };
+
+  await pool.query(
+    `WITH RECURSIVE unter AS (
+        SELECT id FROM nodes WHERE id = $1
+        UNION ALL SELECT n.id FROM nodes n JOIN unter u ON n.parent_id = u.id
+      )
+      UPDATE nodes SET trashed_at = NULL WHERE id IN (SELECT id FROM unter)`,
+    [k.id],
+  );
+
+  // Datei aus dem Trash-Ordner zurückholen, falls möglich
+  const { rows: voll } = await pool.query('SELECT storage_path, trashed_from FROM nodes WHERE id = $1', [k.id]);
+  const sp = voll[0] as { storage_path: string; trashed_from: string | null };
+  const trashPfad = path.join(TRASH_ROOT, k.id);
+  try {
+    if (fs.existsSync(trashPfad)) {
+      const ziel = absolute(String(sp.storage_path));
+      fs.mkdirSync(path.dirname(ziel), { recursive: true });
+      fs.cpSync(trashPfad, ziel, { recursive: true });
+    }
+  } catch {
+    /* Speicher folgt beim nächsten Schreiben */
+  }
+  return `„${was}" wiederhergestellt.`;
+}
+
+/** Werkzeug: alle Dateien eines Ordners auflisten (eine Ebene). */
+async function toolOrdnerInhalt(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const ordner = args.ordner ? String(args.ordner).trim() : '';
+  const knoten = await ladeBaum(ctx.userId);
+  let parentId: string | null = null;
+  if (ordner) {
+    const g = await findeEindeutig(ordner, ctx);
+    if (g.fehler) return g.fehler;
+    if (g.knoten!.kind !== 'folder') return `„${ordner}" ist kein Ordner.`;
+    parentId = String(g.knoten!.id);
+  }
+  const drin = knoten.filter((n) => (n.parent_id ?? null) === parentId);
+  if (!drin.length) return `„${ordner || 'Oberste Ebene'}" ist leer.`;
+  return `${drin.length} Einträge in „${ordner || 'Oberste Ebene'}":\n${drin
+    .sort((a, b) => (a.kind === b.kind ? String(a.name).localeCompare(String(b.name), 'de') : a.kind === 'folder' ? -1 : 1))
+    .map((n) => `  ${n.kind === 'folder' ? '[Ordner]' : '[Datei] '} ${n.name}${n.kind === 'file' ? ` (${Math.round(Number(n.size) / 1024)} KB)` : ''}`)
+    .join('\n')}`;
+}
+
+/** Werkzeug: mehrere Dateien auf einmal verschieben oder löschen. */
+async function toolSammel(args: Record<string, unknown>, ctx: Kontext): Promise<string> {
+  const namen = Array.isArray(args.namen) ? (args.namen as unknown[]).map(String) : [];
+  const aktion = String(args.aktion ?? '');
+  const ziel = args.nach ? String(args.nach).trim() : '';
+  if (!namen.length) return 'Keine Namen angegeben.';
+  if (!['verschieben', 'loeschen'].includes(aktion)) return 'Aktion muss „verschieben" oder „loeschen" sein.';
+
+  const erfolge: string[] = [];
+  const fehler: string[] = [];
+  for (const n of namen) {
+    try {
+      if (aktion === 'verschieben') {
+        const r = await toolVerschieben({ was: n, nach: ziel }, ctx);
+        (r.includes('verschoben') ? erfolge : fehler).push(r);
+      } else {
+        const r = await toolLoeschen({ was: n }, ctx);
+        (r.includes('Papierkorb') ? erfolge : fehler).push(r);
+      }
+    } catch (e) {
+      fehler.push(`${n}: ${e instanceof Error ? e.message : 'Fehler'}`);
+    }
+  }
+  return [
+    erfolge.length ? `${erfolge.length} erledigt:\n${erfolge.join('\n')}` : '',
+    fehler.length ? `${fehler.length} nicht erledigt:\n${fehler.join('\n')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+
 // ─────────────────────────── Werkzeugkatalog ───────────────────────────
 
 type WerkzeugDef = {
@@ -744,6 +1055,96 @@ type WerkzeugDef = {
 };
 
 export const WERKZEUGE: WerkzeugDef[] = [
+  {
+    name: 'dokument_anlegen',
+    beschreibung:
+      'Legt ein leeres Dokument an: Word (.docx), Excel (.xlsx), PowerPoint (.pptx), OpenDocument (.odt/.ods/.odp) sowie .txt, .md, .csv. Für Textinhalte in .md/.txt steht zusätzlich „datei_anlegen" bereit.',
+    parameter: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Dateiname mit Endung, z. B. „Berichtsheft KW 48.docx"' },
+        eltern: { type: 'string', description: 'Zielordner (optional)' },
+      },
+      required: ['name'],
+    },
+    ausfuehren: toolDokument,
+  },
+  {
+    name: 'kopieren',
+    beschreibung: 'Kopiert eine Datei oder einen Ordner (samt Inhalt) in einen anderen Ordner. Namen werden entdoppelt.',
+    parameter: {
+      type: 'object',
+      properties: {
+        was: { type: 'string' },
+        nach: { type: 'string', description: 'Zielordner (leer = oberste Ebene)' },
+      },
+      required: ['was'],
+    },
+    ausfuehren: toolKopieren,
+  },
+  {
+    name: 'teilen',
+    beschreibung: 'Gibt eine eigene Datei oder einen Ordner für ein anderes Konto frei.',
+    parameter: {
+      type: 'object',
+      properties: {
+        was: { type: 'string' },
+        email: { type: 'string', description: 'E-Mail des Kontos' },
+        recht: { type: 'string', enum: ['view', 'edit'], description: 'nur ansehen oder bearbeiten' },
+      },
+      required: ['was', 'email'],
+    },
+    ausfuehren: toolTeilen,
+  },
+  {
+    name: 'freigaben_zeigen',
+    beschreibung: 'Zeigt, für wen eine Datei oder ein Ordner freigegeben ist.',
+    parameter: { type: 'object', properties: { was: { type: 'string' } }, required: ['was'] },
+    ausfuehren: toolFreigaben,
+  },
+  {
+    name: 'versionen_zeigen',
+    beschreibung: 'Zeigt die gesicherten Fassungen einer Datei mit Datum und Größe.',
+    parameter: { type: 'object', properties: { was: { type: 'string' } }, required: ['was'] },
+    ausfuehren: toolVersionen,
+  },
+  {
+    name: 'papierkorb_zeigen',
+    beschreibung: 'Listet den Papierkorb mit allen gelöschten Dateien und Ordnern.',
+    parameter: { type: 'object', properties: {}, required: [] },
+    ausfuehren: toolPapierkorb,
+  },
+  {
+    name: 'wiederherstellen',
+    beschreibung: 'Holt eine Datei oder einen Ordner aus dem Papierkorb zurück.',
+    parameter: { type: 'object', properties: { was: { type: 'string' } }, required: ['was'] },
+    ausfuehren: toolWiederherstellen,
+  },
+  {
+    name: 'ordner_inhalt',
+    beschreibung: 'Listet den Inhalt eines Ordners (eine Ebene) mit Größen — schneller als der ganze Baum.',
+    parameter: {
+      type: 'object',
+      properties: { ordner: { type: 'string', description: 'Ordnername (leer = oberste Ebene)' } },
+      required: [],
+    },
+    ausfuehren: toolOrdnerInhalt,
+  },
+  {
+    name: 'sammel_aktion',
+    beschreibung:
+      'Verschiebt oder löscht mehrere Dateien auf einmal. Für Aufräumarbeiten: „verschiebe alle Notizen nach X" oder „lösche diese drei Dateien".',
+    parameter: {
+      type: 'object',
+      properties: {
+        namen: { type: 'array', items: { type: 'string' }, description: 'Liste der Dateinamen' },
+        aktion: { type: 'string', enum: ['verschieben', 'loeschen'] },
+        nach: { type: 'string', description: 'Zielordner (nur bei verschieben)' },
+      },
+      required: ['namen', 'aktion'],
+    },
+    ausfuehren: toolSammel,
+  },
   {
     name: 'baum_zeigen',
     beschreibung: 'Zeigt alle eigenen und geteilten Dateien und Ordner mit vollem Pfad. Erste Anlaufstelle für Überblick.',
@@ -971,10 +1372,15 @@ export type AgentSchritt =
 const SCHREIBENDE_WERKZEUGE = [
   'ordner_anlegen',
   'datei_anlegen',
+  'dokument_anlegen',
   'ergaenzen',
   'verschieben',
   'umbenennen',
+  'kopieren',
   'loeschen',
+  'wiederherstellen',
+  'teilen',
+  'sammel_aktion',
   'pdf_ausfuellen',
   'zelle_schreiben',
   'ankreuzen',
@@ -983,7 +1389,14 @@ const SCHREIBENDE_WERKZEUGE = [
 
 const SYSTEMPROMPT = `Du bist der Datei-Assistent im Education Planner. Der angemeldete Nutzer arbeitet mit Unterlagen für die Berufsschule.
 
-Du kannst seine kompletten Unterlagen sehen und bearbeiten: Ordner anlegen, Dateien anlegen und ergänzen, verschieben, umbenennen, löschen (Papierkorb), suchen und lesen — auch PDFs ausfüllen.
+Du kannst seine kompletten Unterlagen sehen und bearbeiten:
+- Ordner und Dateien anlegen (Word .docx, Excel .xlsx, PowerPoint .pptx, .odt/.ods/.odp, .txt, .md, .csv)
+- Textdateien anlegen und ergänzen, Office-Dateien öffnen und den Inhalt lesen
+- verschieben, umbenennen, kopieren (auch Ordner samt Inhalt), löschen und wiederherstellen
+- suchen (Volltext und Namen) und lesen
+- Papierkorb anzeigen, Freigaben setzen und anzeigen, Versionsverlauf zeigen
+- PDFs ausfüllen: Tabellenzellen, Ankreuzkästchen, Schreiblinien, Formularfelder
+- mehrere Dateien auf einmal verschieben oder löschen
 
 Regeln:
 1. Arbeite mit den Werkzeugen, nicht mit Behauptungen. Wenn du etwas suchst, nutze „suchen". Wenn du etwas ändern sollst, tu es.
@@ -1036,7 +1449,7 @@ export async function agentLauf(
           (s) => s.art === 'werkzeug' && s.ok && SCHREIBENDE_WERKZEUGE.includes(s.name),
         );
         const behauptetAenderung =
-          /(ausgefüllt|geschrieben|angelegt|geändert|verschoben|gelöscht|umbenannt|ergänzt|erstellt|angekreuzt)/i.test(text);
+          /(ausgefüllt|geschrieben|angelegt|geändert|verschoben|gelöscht|umbenannt|ergänzt|erstellt|angekreuzt|freigegeben|wiederhergestellt|kopiert)/i.test(text);
         if (behauptetAenderung && !hatSchreibwerkzeug) {
           schritte.push({
             art: 'text',

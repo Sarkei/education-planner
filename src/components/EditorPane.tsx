@@ -5,6 +5,11 @@ import type { NodeItem } from '../lib/types';
 
 type OfficeConfig = { documentServerUrl: string; config: Record<string, unknown> };
 
+/** Auto-Speichern: so lange nach dem letzten Tastendruck warten. */
+const SPEICHERN_NACH_TIPPEN_MS = 2_500;
+/** Spätestens nach dieser Zeit sichern, auch bei Dauer-Tippen. */
+const SPEICHERN_SPAETESTENS_MS = 12_000;
+
 declare global {
   interface Window {
     DocsAPI?: { DocEditor: new (id: string, config: Record<string, unknown>) => { destroyEditor: () => void } };
@@ -29,9 +34,17 @@ export function EditorPane({ nodeId }: { nodeId: string }) {
   const [saved, setSaved] = useState(true);
   const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [speichert, setSpeichert] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
   const containerId = useRef(`office-${Math.random().toString(36).slice(2)}`);
+
+  // Zustand für das Auto-Speichern
+  const tippTimer = useRef<number | null>(null);
+  const letzteAenderung = useRef<number>(0);
+  const ungesichert = useRef<boolean>(false);
+  /** Letzter Textstand — für die Sicherung beim Verlassen des Tabs. */
+  const textAktuell = useRef<string>('');
 
   const ext = node?.name.split('.').pop()?.toLowerCase() ?? '';
   const isText = TEXT_EXT.includes(ext);
@@ -110,7 +123,20 @@ export function EditorPane({ nodeId }: { nodeId: string }) {
         const config = {
           ...data.config,
           events: {
-            onDocumentStateChange: (event: { data?: boolean }) => setSaved(!event.data),
+            // data=true bedeutet: es gibt ungesicherte Änderungen.
+            // Darauf sofort reagieren und nach kurzer Pause sichern lassen.
+            onDocumentStateChange: (event: { data?: boolean }) => {
+              const offen = Boolean(event.data);
+              setSaved(!offen);
+              ungesichert.current = offen;
+              letzteAenderung.current = Date.now();
+              if (offen) {
+                if (tippTimer.current) window.clearTimeout(tippTimer.current);
+                tippTimer.current = window.setTimeout(() => {
+                  if (ungesichert.current) void sichereOffice();
+                }, SPEICHERN_NACH_TIPPEN_MS);
+              }
+            },
             onError: (event: { data?: { errorDescription?: string } }) =>
               setError(event?.data?.errorDescription ?? 'Der Editor meldet einen Fehler.'),
           },
@@ -123,28 +149,93 @@ export function EditorPane({ nodeId }: { nodeId: string }) {
     }
     void boot();
 
+    // Sicherheitsnetz: solange Änderungen offen sind, regelmäßig sichern
+    const timer = window.setInterval(() => {
+      if (ungesichert.current) void sichereOffice();
+    }, SPEICHERN_SPAETESTENS_MS);
+
     return () => {
       disposed = true;
+      window.clearInterval(timer);
+      if (ungesichert.current) void sichereOffice();
       editorRef.current?.destroyEditor();
       editorRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.id, isOffice]);
 
-  // Alle 60 Sekunden zwischenspeichern
+  // Auto-Speichern für Textdateien: kurz nach dem Tippen, spätestens nach 12 s
   useEffect(() => {
-    if (!node || !isOffice) return;
+    if (!node || !isText) return;
+    if (tippTimer.current) window.clearTimeout(tippTimer.current);
+    tippTimer.current = window.setTimeout(() => {
+      if (ungesichert.current) void sichereText();
+    }, SPEICHERN_NACH_TIPPEN_MS);
+    return () => {
+      if (tippTimer.current) window.clearTimeout(tippTimer.current);
+    };
+  }, [text, node, isText]);
+
+  // Sicherheitsnetz für Text: bei Dauer-Tippen trotzdem zwischendurch sichern
+  useEffect(() => {
+    if (!node || !isText) return;
     const timer = window.setInterval(() => {
-      void api(`/office/${node.id}/forcesave`, { method: 'POST', body: {} }).catch(() => undefined);
-    }, 60_000);
+      if (ungesichert.current && Date.now() - letzteAenderung.current > SPEICHERN_SPAETESTENS_MS) {
+        void sichereText();
+      }
+    }, 3_000);
     return () => window.clearInterval(timer);
-  }, [node, isOffice]);
+  }, [node, isText]);
+
+  // Beim Schließen des Tabs noch sichern (keepalive überlebt das Entladen)
+  useEffect(() => {
+    function beimVerlassen() {
+      if (!node || !ungesichert.current || !isText) return;
+      const token = getToken();
+      if (!token) return;
+      void fetch(`/api/uploads/text/${node.id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: textAktuell.current }),
+        keepalive: true,
+      });
+    }
+    window.addEventListener('beforeunload', beimVerlassen);
+    return () => window.removeEventListener('beforeunload', beimVerlassen);
+  }, [node, isText]);
+
+  /** Textdatei sichern, ohne die Oberfläche zu blockieren (für das Auto-Speichern). */
+  async function sichereText() {
+    if (!node || !ungesichert.current) return;
+    setSpeichert(true);
+    try {
+      await api(`/uploads/text/${node.id}`, { method: 'PUT', body: { content: textAktuell.current } });
+      ungesichert.current = false;
+      setSaved(true);
+    } catch {
+      /* beim nächsten Versuch erneut */
+    } finally {
+      setSpeichert(false);
+    }
+  }
+
+  /** Office-Datei über den Dokumentenserver sichern lassen. */
+  async function sichereOffice() {
+    if (!node) return;
+    try {
+      await api(`/office/${node.id}/forcesave`, { method: 'POST', body: {} });
+      ungesichert.current = false;
+    } catch {
+      /* beim nächsten Versuch erneut */
+    }
+  }
 
   async function saveText() {
     if (!node || text === null) return;
     setBusy(true);
     try {
       await api(`/uploads/text/${node.id}`, { method: 'PUT', body: { content: text } });
+      ungesichert.current = false;
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.');
@@ -207,13 +298,24 @@ export function EditorPane({ nodeId }: { nodeId: string }) {
         <div className="ml-auto flex items-center gap-2 text-[11px] text-muted">
           {isText ? (
             <>
-              {saved && (
+              {speichert ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> speichert …
+                </span>
+              ) : saved ? (
                 <span className="flex items-center gap-1 text-[var(--accent)]">
                   <Check className="h-3 w-3" /> gespeichert
                 </span>
+              ) : (
+                <span>Änderungen offen</span>
               )}
-              <button className="btn btn-primary !py-1 text-xs" onClick={() => void saveText()} disabled={busy || !canEdit}>
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Speichern
+              <button
+                className="btn btn-ghost !px-2 !py-1"
+                onClick={() => void saveText()}
+                disabled={busy || !canEdit}
+                title="Jetzt speichern"
+              >
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               </button>
             </>
           ) : isOffice ? (
@@ -234,7 +336,13 @@ export function EditorPane({ nodeId }: { nodeId: string }) {
           readOnly={!canEdit}
           onChange={(e) => {
             setText(e.target.value);
+            textAktuell.current = e.target.value;
+            ungesichert.current = true;
+            letzteAenderung.current = Date.now();
             setSaved(false);
+          }}
+          onBlur={() => {
+            if (ungesichert.current) void sichereText();
           }}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {

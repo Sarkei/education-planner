@@ -44,6 +44,21 @@ uploadsRouter.post('/init', requireAuth, async (req: AuthRequest, res) => {
   res.status(201).json({ uploadId: id, chunkSize: 8 * 1024 * 1024 });
 });
 
+/** Gespeicherten Textinhalt einer Textdatei schreiben (Auto-Speichern).
+ *  MUSS vor der generischen Route weiter unten stehen — sonst wird „text" als Upload-ID gelesen. */
+uploadsRouter.put('/text/:id', requireAuth, async (req: AuthRequest, res) => {
+  const access = await nodeAccess(req.params.id, req.userId!);
+  if (!access || access.node.kind !== 'file' || !canWrite(access)) {
+    fail(res, 403, 'forbidden', 'Keine Schreibrechte.');
+    return;
+  }
+  const content = String((req.body as { content?: string })?.content ?? '');
+  const size = await writeAtomic(absolute(access.node.storage_path), Buffer.from(content, 'utf8'));
+  await pool.query('UPDATE nodes SET size = $2, updated_at = now(), version = version + 1 WHERE id = $1', [req.params.id, size]);
+  void indexNode(req.params.id).catch(() => undefined);
+  res.json({ ok: true, size });
+});
+
 /** Ein Teil hochladen (Rohbytes, Reihenfolge über die Index-Nummer). */
 uploadsRouter.put(
   '/:id/:index',
@@ -140,18 +155,7 @@ uploadsRouter.post('/:id/complete', requireAuth, async (req: AuthRequest, res) =
 });
 
 /** Textdatei direkt anlegen/bearbeiten (für .md/.txt ohne Office). */
-uploadsRouter.put('/text/:id', requireAuth, async (req: AuthRequest, res) => {
-  const access = await nodeAccess(req.params.id, req.userId!);
-  if (!access || access.node.kind !== 'file' || !canWrite(access)) {
-    fail(res, 403, 'forbidden', 'Keine Schreibrechte.');
-    return;
-  }
-  const content = String((req.body as { content?: string })?.content ?? '');
-  const size = await writeAtomic(absolute(access.node.storage_path), Buffer.from(content, 'utf8'));
-  await pool.query('UPDATE nodes SET size = $2, updated_at = now(), version = version + 1 WHERE id = $1', [req.params.id, size]);
-  void indexNode(req.params.id).catch(() => undefined);
-  res.json({ ok: true, size });
-});
+
 
 
 async function uniqueName(parentId: string | null, desired: string): Promise<string> {

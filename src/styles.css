@@ -5,19 +5,19 @@
 
 @import 'tailwindcss';
 
-/* Palette und Typografie wie im Meal-Planner/Fitness-Tracker: ruhiges Salbeigrün,
-   Serifenschrift für Überschriften, feine Kanten statt Schatten. */
+/* Typografie und die beiden Zusatzflächen. Die Farben selbst kommen aus
+   design/farben.css (kit/paletten.json) — hier keine festen Werte mehr,
+   sonst schleicht sich ein fremder Farbstich ein. */
 :root {
-  --bg-soft: #131d19;
-  --card-2: #1a2721;
+  /* zweite Fläche (Formulare, Pill-Leiste, Vorschau) — neutral, kein Grünstich */
+  --bg-soft: var(--surface-2);
+  --card-2: var(--surface-3);
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  color-scheme: dark;
 }
 
 [data-theme='light'] {
-  --bg-soft: #ece9df;
-  --card-2: #f7f5ee;
-  color-scheme: light;
+  --bg-soft: var(--surface-2);
+  --card-2: var(--surface-3);
 }
 
 html,
