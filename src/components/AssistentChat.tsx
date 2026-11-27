@@ -92,7 +92,10 @@ export function AssistentChat({ offen, onSchliessen, onDateiAendert }: {
   if (!offen) return null;
 
   return (
-    <aside className="flex w-[22rem] shrink-0 flex-col border-l border-[var(--line)] bg-[var(--bg-soft)] xl:w-[26rem]">
+    <>
+      {/* Mobil: Overlay über dem Inhalt, damit nichts verdeckt bleibt */}
+      <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={onSchliessen} />
+      <aside className="fixed inset-y-0 right-0 z-50 flex w-[92vw] max-w-sm flex-col border-l border-[var(--line)] bg-[var(--bg-soft)] md:static md:z-auto md:w-[22rem] md:max-w-none md:shrink-0 xl:w-[26rem]">
       <header className="flex items-center gap-2 border-b border-[var(--line)] px-3 py-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent-soft)]">
           <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
@@ -215,7 +218,8 @@ export function AssistentChat({ offen, onSchliessen, onDateiAendert }: {
           </p>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 

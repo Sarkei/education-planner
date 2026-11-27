@@ -981,7 +981,7 @@ const SCHREIBENDE_WERKZEUGE = [
   'auf_linie_schreiben',
 ];
 
-const SYSTEMPROMPT = `Du bist der Datei-Assistent im Education Planner von Tim (Berufsschule IT11b, Fachinformatiker Anwendungsentwicklung).
+const SYSTEMPROMPT = `Du bist der Datei-Assistent im Education Planner. Der angemeldete Nutzer arbeitet mit Unterlagen für die Berufsschule.
 
 Du kannst seine kompletten Unterlagen sehen und bearbeiten: Ordner anlegen, Dateien anlegen und ergänzen, verschieben, umbenennen, löschen (Papierkorb), suchen und lesen — auch PDFs ausfüllen.
 

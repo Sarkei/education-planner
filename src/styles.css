@@ -111,7 +111,10 @@ body {
 
 .btn-primary {
   background: var(--accent);
-  color: var(--accent-ink);
+  /* --on-accent ist die Schriftfarbe, die auf dem Akzent den WCAG-Kontrast hält
+     (accent-ink waere 2,19:1 — zu wenig). */
+  color: var(--on-accent);
+  font-weight: 600;
 }
 
 .btn-primary:hover:not(:disabled) {
