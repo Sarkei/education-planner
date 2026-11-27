@@ -8,6 +8,7 @@ import { authRouter } from './auth';
 import { nodesRouter } from './nodes';
 import { uploadsRouter } from './uploads';
 import { sharesRouter } from './shares';
+import { assistentRouter } from './assistent-route';
 import { officeRouter } from './onlyoffice';
 import { searchRouter } from './search';
 import { startIndexer } from './indexer';
@@ -63,6 +64,7 @@ app.use('/api/nodes', nodesRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/shares', sharesRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/assistent', assistentRouter);
 app.use('/api', officeRouter);
 
 app.use('/api', (_req, res) => {

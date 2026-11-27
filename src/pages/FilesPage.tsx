@@ -1,73 +1,63 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Archive,
-  ArrowLeft,
-  ChevronRight,
   ClipboardPaste,
   Copy,
   CopyPlus,
   Download,
   ExternalLink,
-  File as FileIcon,
   FilePlus,
-  FileSpreadsheet,
-  FileText,
-  Folder,
   FolderPlus,
-  Image as ImageIcon,
-  LayoutGrid,
-  List,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
-  Music,
-  Presentation,
   Scissors,
   Share2,
   Trash2,
   Upload,
-  Video,
 } from 'lucide-react';
 import { api, getToken } from '../lib/api';
 import { navigate } from '../App';
 import { Tree } from '../components/Tree';
 import { Modal } from '../components/Modal';
 import { ShareDialog } from '../components/ShareDialog';
-import { EmptyState, PageHead, Shell } from '../components/Shell';
+import { Shell } from '../components/Shell';
 import { ContextMenu, type MenuEntry } from '../components/ContextMenu';
 import { CreateFileDialog } from '../components/CreateFileDialog';
+import { EditorPane } from '../components/EditorPane';
+import { AssistentChat, AssistentKnopf } from '../components/AssistentChat';
 import type { NodeItem } from '../lib/types';
 
 const CHUNK = 8 * 1024 * 1024;
 
-function iconFor(node: NodeItem) {
-  if (node.kind === 'folder') return <Folder className="h-[18px] w-[18px] text-[var(--accent)]" />;
-  const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-  if (['docx', 'doc', 'odt', 'rtf', 'txt', 'md'].includes(ext)) return <FileText className="h-[18px] w-[18px] text-muted" />;
-  if (['xlsx', 'xls', 'ods', 'csv'].includes(ext)) return <FileSpreadsheet className="h-[18px] w-[18px] text-muted" />;
-  if (['pptx', 'ppt', 'odp'].includes(ext)) return <Presentation className="h-[18px] w-[18px] text-muted" />;
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif', 'tif', 'tiff'].includes(ext))
-    return <ImageIcon className="h-[18px] w-[18px] text-muted" />;
-  if (['mp3', 'wav', 'ogg', 'oga', 'm4a', 'flac', 'aac'].includes(ext)) return <Music className="h-[18px] w-[18px] text-muted" />;
-  if (['mp4', 'webm', 'mov', 'm4v', 'mkv'].includes(ext)) return <Video className="h-[18px] w-[18px] text-muted" />;
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <Archive className="h-[18px] w-[18px] text-muted" />;
-  return <FileIcon className="h-[18px] w-[18px] text-muted" />;
+/** Schlüssel für den gemerkten Zustand — überlebt das Neuladen. */
+const LS_EXPANDED = 'eduplanner.tree.expanded';
+const LS_SELECTED = 'eduplanner.tree.selected';
+const LS_SIDEBAR = 'eduplanner.tree.sidebar';
+
+function readExpanded(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LS_EXPANDED);
+    const list = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
 }
 
-function formatSize(bytes: number): string {
-  if (!bytes) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
+/** Datei-ID aus dem Hash (#/edit/<id> oder #/datei/<id>). */
+function idFromHash(): string | null {
+  const match = location.hash.match(/^#\/(?:edit|datei)\/([^/?#]+)/);
+  return match ? match[1] : null;
 }
 
 export function FilesPage() {
   const [nodes, setNodes] = useState<NodeItem[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(() => localStorage.getItem(LS_SELECTED) || null);
+  const [openFileId, setOpenFileId] = useState<string | null>(() => idFromHash());
+  const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => localStorage.getItem(LS_SIDEBAR) !== 'closed');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [chatOffen, setChatOffen] = useState<boolean>(() => localStorage.getItem('eduplanner.chat') === 'offen');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -77,12 +67,9 @@ export function FilesPage() {
   const [renameValue, setRenameValue] = useState('');
   const [uploads, setUploads] = useState<Array<{ name: string; percent: number }>>([]);
   const [dragging, setDragging] = useState(false);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; node: NodeItem | null } | null>(null);
   const [clipboard, setClipboard] = useState<{ mode: 'copy' | 'cut'; node: NodeItem } | null>(null);
   const [fileDialog, setFileDialog] = useState<{ parentId: string | null; parentName: string } | null>(null);
-  const [view, setView] = useState<'list' | 'grid'>(() => (localStorage.getItem('eduplanner.view') as 'list' | 'grid') || 'list');
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -101,6 +88,47 @@ export function FilesPage() {
     void load();
   }, [load]);
 
+  // Hash-Route folgen (Zurück-Taste, Direktlink)
+  useEffect(() => {
+    const onHash = () => setOpenFileId(idFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  // Zustand sichern: aufgeklappte Ordner, Auswahl, ein-/ausgeklappte Spalte
+  useEffect(() => {
+    localStorage.setItem(LS_EXPANDED, JSON.stringify([...expanded]));
+  }, [expanded]);
+  useEffect(() => {
+    if (selectedFolder) localStorage.setItem(LS_SELECTED, selectedFolder);
+    else localStorage.removeItem(LS_SELECTED);
+  }, [selectedFolder]);
+  useEffect(() => {
+    localStorage.setItem(LS_SIDEBAR, sidebarOpen ? 'open' : 'closed');
+  }, [sidebarOpen]);
+  useEffect(() => {
+    localStorage.setItem('eduplanner.chat', chatOffen ? 'offen' : 'zu');
+  }, [chatOffen]);
+
+  // Beim ersten Laden den Pfad zur gemerkten Auswahl aufklappen
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !nodes.length) return;
+    restored.current = true;
+    const target = openFileId ?? selectedFolder;
+    if (!target) return;
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const next = new Set(expanded);
+    let current = byId.get(target) ?? null;
+    let guard = 0;
+    while (current?.parentId && guard++ < 50) {
+      next.add(current.parentId);
+      current = byId.get(current.parentId) ?? null;
+    }
+    if (next.size !== expanded.size) setExpanded(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
+
   // Tastaturkürzel wie im Explorer
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -117,20 +145,26 @@ export function FilesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clipboard, selectedFolder]);
 
-  const children = useMemo(() => {
-    const list = nodes.filter((n) => (n.parentId ?? null) === selectedFolder);
-    return list.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, 'de') : a.kind === 'folder' ? -1 : 1));
-  }, [nodes, selectedFolder]);
+  const openFile = useMemo(
+    () => (openFileId ? nodes.find((n) => n.id === openFileId) ?? null : null),
+    [nodes, openFileId],
+  );
 
   const breadcrumb = useMemo(() => {
+    const anchor = openFile ?? nodes.find((n) => n.id === selectedFolder) ?? null;
     const path: NodeItem[] = [];
-    let current = nodes.find((n) => n.id === selectedFolder) ?? null;
-    while (current) {
+    let current: NodeItem | null = anchor;
+    let guard = 0;
+    while (current && guard++ < 50) {
       path.unshift(current);
-      current = nodes.find((n) => n.id === current?.parentId) ?? null;
+      current = current.parentId ? nodes.find((n) => n.id === current?.parentId) ?? null : null;
     }
     return path;
-  }, [nodes, selectedFolder]);
+  }, [nodes, selectedFolder, openFile]);
+
+  const currentTitle = breadcrumb.length ? breadcrumb[breadcrumb.length - 1].name : 'Alle Dateien';
+  /** Zielordner für neue Dateien: der Ordner der offenen Datei, sonst die Baumauswahl. */
+  const folderForNew = openFile?.parentId ?? selectedFolder;
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -139,6 +173,19 @@ export function FilesPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  function openNode(node: NodeItem) {
+    if (node.kind === 'folder') {
+      setSelectedFolder(node.id);
+      setExpanded((prev) => new Set(prev).add(node.id));
+      setDrawerOpen(false);
+      return;
+    }
+    setSelectedFolder(node.parentId ?? null);
+    setOpenFileId(node.id);
+    setDrawerOpen(false);
+    navigate(`#/datei/${node.id}`);
   }
 
   async function moveNode(dragId: string, targetId: string | null) {
@@ -154,7 +201,7 @@ export function FilesPage() {
     const name = folderName.trim();
     if (!name) return;
     try {
-      await api('/nodes/folder', { body: { parentId: selectedFolder, name } });
+      await api('/nodes/folder', { body: { parentId: folderForNew, name } });
       setNewFolderOpen(false);
       setFolderName('');
       await load();
@@ -175,31 +222,27 @@ export function FilesPage() {
   }
 
   async function remove(node: NodeItem) {
-    if (!confirm(`„${node.name}" in den Papierkorb legen?`)) return;
+    if (!confirm(`„${node.name}“ in den Papierkorb legen?`)) return;
     try {
       await api(`/nodes/${node.id}`, { method: 'DELETE' });
+      if (openFileId === node.id) {
+        setOpenFileId(null);
+        navigate('#/files');
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Löschen fehlgeschlagen.');
     }
   }
 
-  function open(node: NodeItem) {
-    if (node.kind === 'folder') {
-      setSelectedFolder(node.id);
-      setExpanded((prev) => new Set(prev).add(node.id));
-      return;
-    }
-    navigate(`#/edit/${node.id}`);
-  }
-
   /** Upload in Teilen — so passen auch große Dateien durch den Tunnel. */
   async function uploadFiles(files: FileList | File[]) {
+    const parentId = folderForNew;
     for (const file of Array.from(files)) {
       setUploads((prev) => [...prev, { name: file.name, percent: 0 }]);
       try {
         const init = await api<{ uploadId: string }>('/uploads/init', {
-          body: { parentId: selectedFolder, name: file.name, size: file.size, mime: file.type || undefined },
+          body: { parentId, name: file.name, size: file.size, mime: file.type || undefined },
         });
         const total = Math.max(1, Math.ceil(file.size / CHUNK));
         for (let index = 0; index < total; index++) {
@@ -222,7 +265,9 @@ export function FilesPage() {
 
   async function download(node: NodeItem) {
     const token = getToken();
-    const res = await fetch(`/api/nodes/${node.id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const res = await fetch(`/api/nodes/${node.id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) {
       setError('Download fehlgeschlagen.');
       return;
@@ -239,12 +284,11 @@ export function FilesPage() {
   /** Einfügen: kopieren legt eine Kopie an, ausschneiden verschiebt. */
   async function paste() {
     if (!clipboard) return;
-    const target = selectedFolder;
     try {
       if (clipboard.mode === 'copy') {
-        await api(`/nodes/${clipboard.node.id}/copy`, { body: { parentId: target } });
+        await api(`/nodes/${clipboard.node.id}/copy`, { body: { parentId: selectedFolder } });
       } else {
-        await api(`/nodes/${clipboard.node.id}`, { method: 'PATCH', body: { parentId: target } });
+        await api(`/nodes/${clipboard.node.id}`, { method: 'PATCH', body: { parentId: selectedFolder } });
       }
       setClipboard(null);
       await load();
@@ -256,12 +300,21 @@ export function FilesPage() {
   /** Rechtsklick-Menü passend zum Ziel (Knoten oder leerer Bereich). */
   function menuEntries(node: NodeItem | null): MenuEntry[] {
     const entries: MenuEntry[] = [];
-    entries.push({ kind: 'item', label: 'Neuer Ordner', icon: <FolderPlus className="h-3.5 w-3.5" />, onClick: () => setNewFolderOpen(true) });
+    entries.push({
+      kind: 'item',
+      label: 'Neuer Ordner',
+      icon: <FolderPlus className="h-3.5 w-3.5" />,
+      onClick: () => setNewFolderOpen(true),
+    });
     entries.push({
       kind: 'item',
       label: 'Neue Datei',
       icon: <FilePlus className="h-3.5 w-3.5" />,
-      onClick: () => setFileDialog({ parentId: node && node.kind === 'folder' ? node.id : null, parentName: node?.name ?? currentTitle }),
+      onClick: () =>
+        setFileDialog({
+          parentId: node && node.kind === 'folder' ? node.id : folderForNew,
+          parentName: node?.name ?? currentTitle,
+        }),
     });
     entries.push({ kind: 'separator' });
     entries.push({
@@ -275,7 +328,12 @@ export function FilesPage() {
     if (!node) return entries;
 
     entries.push({ kind: 'separator' });
-    entries.push({ kind: 'item', label: node.kind === 'folder' ? 'Öffnen' : 'Bearbeiten', icon: <ExternalLink className="h-3.5 w-3.5" />, onClick: () => open(node) });
+    entries.push({
+      kind: 'item',
+      label: node.kind === 'folder' ? 'Öffnen' : 'Bearbeiten',
+      icon: <ExternalLink className="h-3.5 w-3.5" />,
+      onClick: () => openNode(node),
+    });
     entries.push({
       kind: 'item',
       label: 'Umbenennen',
@@ -286,8 +344,20 @@ export function FilesPage() {
       },
     });
     entries.push({ kind: 'separator' });
-    entries.push({ kind: 'item', label: 'Kopieren', icon: <Copy className="h-3.5 w-3.5" />, shortcut: 'Strg+C', onClick: () => setClipboard({ mode: 'copy', node }) });
-    entries.push({ kind: 'item', label: 'Ausschneiden', icon: <Scissors className="h-3.5 w-3.5" />, shortcut: 'Strg+X', onClick: () => setClipboard({ mode: 'cut', node }) });
+    entries.push({
+      kind: 'item',
+      label: 'Kopieren',
+      icon: <Copy className="h-3.5 w-3.5" />,
+      shortcut: 'Strg+C',
+      onClick: () => setClipboard({ mode: 'copy', node }),
+    });
+    entries.push({
+      kind: 'item',
+      label: 'Ausschneiden',
+      icon: <Scissors className="h-3.5 w-3.5" />,
+      shortcut: 'Strg+X',
+      onClick: () => setClipboard({ mode: 'cut', node }),
+    });
     entries.push({
       kind: 'item',
       label: 'Duplizieren',
@@ -302,88 +372,106 @@ export function FilesPage() {
       },
     });
     entries.push({ kind: 'separator' });
-    entries.push({ kind: 'item', label: 'Teilen', icon: <Share2 className="h-3.5 w-3.5" />, onClick: () => setShareNode(node) });
-    entries.push({ kind: 'item', label: 'Herunterladen', icon: <Download className="h-3.5 w-3.5" />, onClick: () => void download(node) });
+    entries.push({
+      kind: 'item',
+      label: 'Teilen',
+      icon: <Share2 className="h-3.5 w-3.5" />,
+      onClick: () => setShareNode(node),
+    });
+    entries.push({
+      kind: 'item',
+      label: 'Herunterladen',
+      icon: <Download className="h-3.5 w-3.5" />,
+      onClick: () => void download(node),
+    });
     entries.push({ kind: 'separator' });
-    entries.push({ kind: 'item', label: 'In den Papierkorb', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => void remove(node) });
+    entries.push({
+      kind: 'item',
+      label: 'In den Papierkorb',
+      icon: <Trash2 className="h-3.5 w-3.5" />,
+      danger: true,
+      onClick: () => void remove(node),
+    });
     return entries;
   }
 
-  // In der Galerie: Vorschau-Links für alle Bilder des Ordners in einem Aufruf
-  useEffect(() => {
-    if (view !== 'grid') return;
-    const images = children.filter((n) => n.kind === 'file' && /^(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico)$/i.test(n.name.split('.').pop() ?? ''));
-    if (!images.length) {
-      setThumbs({});
-      return;
-    }
-    let cancelled = false;
-    void api<{ urls: Record<string, string> }>('/nodes/preview-tokens', { body: { ids: images.map((i) => i.id) } })
-      .then((data) => {
-        if (!cancelled) setThumbs(data.urls);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [view, children]);
-
-  function switchView(next: 'list' | 'grid') {
-    setView(next);
-    localStorage.setItem('eduplanner.view', next);
-  }
-
+  const ownNodes = nodes.filter((n) => !n.shared);
   const sharedRoots = nodes.filter((n) => n.shared);
-  const currentTitle = breadcrumb.length ? breadcrumb[breadcrumb.length - 1].name : 'Alle Dateien';
 
-  return (
-    <Shell tab="files">
-      <div className="flex h-full">
-        <aside className="hidden w-72 shrink-0 flex-col border-r border-[var(--line)] p-3 md:flex">
-          <div className="mb-1.5 flex gap-1.5">
-            <button className="btn btn-primary flex-1 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
-              <FolderPlus className="h-3.5 w-3.5" /> Ordner
-            </button>
-            <button
-              className="btn btn-ghost flex-1 !py-1.5 text-xs"
-              onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
-            >
-              <FilePlus className="h-3.5 w-3.5" /> Datei
-            </button>
-          </div>
-          <button className="btn btn-ghost mb-2 w-full !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
-            <Upload className="h-3.5 w-3.5" /> Hochladen
-          </button>
-          <div className="scroll-thin min-h-0 flex-1 overflow-auto">
-            <p className="label mt-2">Meine Dateien</p>
+  const treeBlock = (
+    <>
+      <div className="mb-1.5 flex gap-1.5">
+        <button className="btn btn-primary flex-1 !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
+          <FolderPlus className="h-3.5 w-3.5" /> Ordner
+        </button>
+        <button
+          className="btn btn-ghost flex-1 !py-1.5 text-xs"
+          onClick={() => setFileDialog({ parentId: folderForNew, parentName: currentTitle })}
+        >
+          <FilePlus className="h-3.5 w-3.5" /> Datei
+        </button>
+      </div>
+      <button className="btn btn-ghost mb-2 w-full !py-1.5 text-xs" onClick={() => fileInput.current?.click()}>
+        <Upload className="h-3.5 w-3.5" /> Hochladen
+      </button>
+      <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+        <p className="label mt-2">Meine Dateien</p>
+        {loading ? (
+          <p className="px-2 py-4 text-xs text-muted">Lädt …</p>
+        ) : (
+          <Tree
+            nodes={ownNodes}
+            selectedId={openFileId ?? selectedFolder}
+            onSelect={openNode}
+            onDrop={(d, t) => void moveNode(d, t)}
+            expanded={expanded}
+            toggle={toggle}
+            onContextMenu={(node, x, y) => setMenu({ x, y, node })}
+          />
+        )}
+        {sharedRoots.length > 0 && (
+          <>
+            <p className="label mt-4">Mit mir geteilt</p>
             <Tree
-              nodes={nodes.filter((n) => !n.shared)}
-              selectedId={selectedFolder}
-              onSelect={(n) => setSelectedFolder(n.id)}
+              nodes={sharedRoots}
+              selectedId={openFileId ?? selectedFolder}
+              onSelect={openNode}
               onDrop={(d, t) => void moveNode(d, t)}
               expanded={expanded}
               toggle={toggle}
               onContextMenu={(node, x, y) => setMenu({ x, y, node })}
             />
-            {sharedRoots.length > 0 && (
-              <>
-                <p className="label mt-4">Mit mir geteilt</p>
-                <Tree
-                  nodes={sharedRoots}
-                  selectedId={selectedFolder}
-                  onSelect={(n) => setSelectedFolder(n.id)}
-                  onDrop={(d, t) => void moveNode(d, t)}
-                  expanded={expanded}
-                  toggle={toggle}
-                  onContextMenu={(node, x, y) => setMenu({ x, y, node })}
-                />
-              </>
-            )}
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <Shell tab="files">
+      <div className="flex h-full">
+        {/* Baum: feste Spalte auf großen Bildschirmen, Ausklapper auf dem Handy */}
+        {sidebarOpen && (
+          <aside className="hidden w-72 shrink-0 flex-col border-r border-[var(--line)] p-3 md:flex">{treeBlock}</aside>
+        )}
+
+        {drawerOpen && (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} />
+            <aside className="absolute inset-y-0 left-0 flex w-[19rem] max-w-[85vw] flex-col border-r border-[var(--line)] bg-[var(--bg)] p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="serif text-[15px]">Dateien</p>
+                <button className="btn btn-ghost !px-2 !py-1" onClick={() => setDrawerOpen(false)} title="Baum schließen">
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
+              </div>
+              {treeBlock}
+            </aside>
           </div>
-        </aside>
+        )}
 
         <main
-          className={`scroll-thin min-w-0 flex-1 overflow-auto p-4 ${dragging ? 'bg-[var(--accent-soft)]' : ''}`}
+          className={`flex min-w-0 flex-1 flex-col ${dragging ? 'bg-[var(--accent-soft)]' : ''}`}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('Files')) {
               e.preventDefault();
@@ -399,35 +487,71 @@ export function FilesPage() {
             }
           }}
         >
-          <div className="mx-auto max-w-6xl">
-            <PageHead
-              eyebrow="Sammlung"
-              title={currentTitle}
-              hint={`${children.length} ${children.length === 1 ? 'Eintrag' : 'Einträge'} · Dateien liegen als echte Dateien auf dem NAS`}
-              action={
-                <div className="flex gap-1.5">
-                  <div className="pill-nav !p-0.5">
-                    <button
-                      className={`pill !px-2 !py-1.5 ${view === 'list' ? 'active' : ''}`}
-                      onClick={() => switchView('list')}
-                      title="Listenansicht"
-                    >
-                      <List className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      className={`pill !px-2 !py-1.5 ${view === 'grid' ? 'active' : ''}`}
-                      onClick={() => switchView('grid')}
-                      title="Galerieansicht"
-                    >
-                      <LayoutGrid className="h-3.5 w-3.5" />
-                    </button>
+          {/* Kopfzeile der Dokumentansicht */}
+          <div className="flex items-center gap-1.5 border-b border-[var(--line)] px-3 py-1.5">
+            <button
+              className="btn btn-ghost !px-1.5 !py-1 md:hidden"
+              onClick={() => setDrawerOpen(true)}
+              title="Baum öffnen"
+            >
+              <PanelLeftOpen className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="btn btn-ghost hidden !px-1.5 !py-1 md:inline-flex"
+              onClick={() => setSidebarOpen((v) => !v)}
+              title={sidebarOpen ? 'Baum einklappen' : 'Baum ausklappen'}
+            >
+              {sidebarOpen ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+            </button>
+            <span className="truncate text-[11px] text-muted">{currentTitle}</span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <AssistentKnopf onClick={() => setChatOffen(true)} versteckt={chatOffen} />
+              <button className="btn btn-primary !py-1 text-xs" onClick={() => fileInput.current?.click()}>
+                <Upload className="h-3.5 w-3.5" /> Hochladen
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <p className="mx-3 mt-2 rounded-xl bg-[var(--danger)]/10 px-3 py-2 text-xs font-medium text-[var(--danger)]">
+              {error}
+            </p>
+          )}
+
+          {uploads.length > 0 && (
+            <div className="mx-3 mt-2 space-y-2">
+              {uploads.map((u) => (
+                <div key={u.name} className="card p-3">
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span className="truncate">{u.name}</span>
+                    <span className="text-muted">{u.percent}%</span>
                   </div>
-                  <button className="btn btn-ghost !py-1.5 text-xs md:hidden" onClick={() => setNewFolderOpen(true)}>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
+                    <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${u.percent}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex min-h-0 flex-1">
+            <div className="min-h-0 min-w-0 flex-1">
+            {openFileId ? (
+              <EditorPane nodeId={openFileId} />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                <p className="serif text-lg">{selectedFolder ? currentTitle : 'Wähle links eine Datei'}</p>
+                <p className="max-w-sm text-[12px] text-muted">
+                  PDF, Word, Excel, PowerPoint, Text und Markdown öffnen sich hier rechts — der Ordnerbaum bleibt links
+                  stehen. Dateien kannst du auch einfach in dieses Fenster ziehen.
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  <button className="btn btn-ghost !py-1.5 text-xs" onClick={() => setNewFolderOpen(true)}>
                     <FolderPlus className="h-3.5 w-3.5" /> Ordner
                   </button>
                   <button
-                    className="btn btn-ghost !py-1.5 text-xs md:hidden"
-                    onClick={() => setFileDialog({ parentId: selectedFolder, parentName: currentTitle })}
+                    className="btn btn-ghost !py-1.5 text-xs"
+                    onClick={() => setFileDialog({ parentId: folderForNew, parentName: currentTitle })}
                   >
                     <FilePlus className="h-3.5 w-3.5" /> Datei
                   </button>
@@ -435,211 +559,14 @@ export function FilesPage() {
                     <Upload className="h-3.5 w-3.5" /> Hochladen
                   </button>
                 </div>
-              }
-            />
-
-            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px]">
-              <button
-                className="btn btn-ghost !px-2 !py-1"
-                onClick={() => setSelectedFolder(breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].id : null)}
-                disabled={!selectedFolder}
-                title="Eine Ebene zurück"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-              </button>
-              <button className={selectedFolder ? 'text-muted hover:underline' : 'font-semibold'} onClick={() => setSelectedFolder(null)}>
-                Alle Dateien
-              </button>
-              {breadcrumb.map((item) => (
-                <span key={item.id} className="flex items-center gap-1">
-                  <ChevronRight className="h-3 w-3 text-muted" />
-                  <button onClick={() => setSelectedFolder(item.id)} className="hover:underline">
-                    {item.name}
-                  </button>
-                </span>
-              ))}
+              </div>
+            )}
             </div>
-
-            {error && (
-              <p className="mb-3 rounded-xl bg-[var(--danger)]/10 px-3 py-2 text-xs font-medium text-[var(--danger)]">{error}</p>
-            )}
-
-            {uploads.length > 0 && (
-              <div className="mb-3 space-y-2">
-                {uploads.map((u) => (
-                  <div key={u.name} className="card p-3">
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="truncate">{u.name}</span>
-                      <span className="text-muted">{u.percent}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
-                      <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${u.percent}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {loading ? (
-              <p className="text-sm text-muted">Lädt …</p>
-            ) : children.length === 0 ? (
-              <EmptyState
-                title="Hier ist noch nichts"
-                hint="Zieh Dateien aus dem Explorer in dieses Fenster oder nutze „Hochladen“. Ordner legst du mit „Ordner“ an."
-                action={
-                  <button className="btn btn-ghost mt-2" onClick={() => setNewFolderOpen(true)}>
-                    <FolderPlus className="h-4 w-4" /> Ersten Ordner anlegen
-                  </button>
-                }
-              />
-            ) : view === 'grid' ? (
-              <div
-                className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-                onContextMenu={(e) => {
-                  if ((e.target as HTMLElement).closest('.tile')) return;
-                  e.preventDefault();
-                  setMenu({ x: e.clientX, y: e.clientY, node: null });
-                }}
-              >
-                {children.map((node) => {
-                  const isImage = node.kind === 'file' && !!thumbs[node.id];
-                  return (
-                    <div
-                      key={node.id}
-                      className="tile card group relative overflow-hidden"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', node.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      onDragOver={(e) => {
-                        if (node.kind !== 'folder') return;
-                        e.preventDefault();
-                        setDropTarget(node.id);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDropTarget(null);
-                        const dragId = e.dataTransfer.getData('text/plain');
-                        if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
-                      }}
-                      onClick={() => open(node)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setMenu({ x: e.clientX, y: e.clientY, node });
-                      }}
-                      title={node.name}
-                    >
-                      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-[var(--bg-soft)]">
-                        {isImage ? (
-                          <img src={thumbs[node.id]} alt={node.name} loading="lazy" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="scale-[2] opacity-60">{iconFor(node)}</span>
-                        )}
-                      </div>
-                      <div className="border-t border-[var(--line)] px-2.5 py-2">
-                        <p className="truncate text-[11.5px] font-medium">{node.name}</p>
-                        <p className="text-[10.5px] text-muted">
-                          {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                className="space-y-1.5"
-                onContextMenu={(e) => {
-                  if ((e.target as HTMLElement).closest('.row-item')) return;
-                  e.preventDefault();
-                  setMenu({ x: e.clientX, y: e.clientY, node: null });
-                }}
-              >
-                {children.map((node) => (
-                  <div
-                    key={node.id}
-                    className={`row-item group ${dropTarget === node.id ? 'drop-target' : ''}`}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/plain', node.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={(e) => {
-                      if (node.kind !== 'folder') return;
-                      e.preventDefault();
-                      setDropTarget(node.id);
-                    }}
-                    onDragLeave={() => setDropTarget((c) => (c === node.id ? null : c))}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDropTarget(null);
-                      const dragId = e.dataTransfer.getData('text/plain');
-                      if (node.kind === 'folder' && dragId && dragId !== node.id) void moveNode(dragId, node.id);
-                    }}
-                    onClick={() => open(node)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setMenu({ x: e.clientX, y: e.clientY, node });
-                    }}
-                  >
-                    {iconFor(node)}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-medium" title={node.name}>
-                        {node.name}
-                      </p>
-                      <p className="text-[11px] text-muted">
-                        {node.kind === 'folder' ? 'Ordner' : formatSize(node.size)}
-                        {node.permission !== 'owner' ? ` · ${node.permission === 'edit' ? 'bearbeitbar' : 'nur ansehen'}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1"
-                        title="Umbenennen"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenaming(node);
-                          setRenameValue(node.name);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1"
-                        title="Teilen"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShareNode(node);
-                        }}
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1"
-                        title="Herunterladen"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void download(node);
-                        }}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="btn btn-ghost !px-1.5 !py-1 text-[var(--danger)]"
-                        title="In den Papierkorb"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void remove(node);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <AssistentChat
+              offen={chatOffen}
+              onSchliessen={() => setChatOffen(false)}
+              onDateiAendert={() => void load()}
+            />
           </div>
         </main>
       </div>
@@ -707,7 +634,7 @@ export function FilesPage() {
           onClose={() => setFileDialog(null)}
           onCreated={(node) => {
             void load();
-            if (node.kind === 'file') navigate(`#/edit/${node.id}`);
+            if (node.kind === 'file') openNode(node);
           }}
         />
       )}

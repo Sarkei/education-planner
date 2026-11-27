@@ -53,10 +53,7 @@ export function Tree({ nodes, selectedId, onSelect, onDrop, expanded, toggle, on
               const dragId = e.dataTransfer.getData('text/plain');
               if (node.kind === 'folder' && dragId && dragId !== node.id) onDrop(dragId, node.id);
             }}
-            onClick={() => {
-              onSelect(node);
-              if (node.kind === 'folder') toggle(node.id);
-            }}
+            onClick={() => onSelect(node)}
             onContextMenu={(e) => {
               if (!onContextMenu) return;
               e.preventDefault();
@@ -65,7 +62,18 @@ export function Tree({ nodes, selectedId, onSelect, onDrop, expanded, toggle, on
             }}
           >
             {node.kind === 'folder' ? (
-              <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted transition ${isOpen ? 'rotate-90' : ''}`} />
+              <button
+                type="button"
+                className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-[var(--accent-soft)]"
+                title={isOpen ? 'Zuklappen' : 'Aufklappen'}
+                aria-label={isOpen ? 'Zuklappen' : 'Aufklappen'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggle(node.id);
+                }}
+              >
+                <ChevronRight className={`h-3.5 w-3.5 text-muted transition ${isOpen ? 'rotate-90' : ''}`} />
+              </button>
             ) : (
               <span className="w-3.5 shrink-0" />
             )}

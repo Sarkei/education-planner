@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { LoginPage } from './pages/LoginPage';
 import { FilesPage } from './pages/FilesPage';
-import { EditorPage } from './pages/EditorPage';
 import { AdminPage } from './pages/AdminPage';
 import { TrashPage } from './pages/TrashPage';
 import { SearchPage } from './pages/SearchPage';
@@ -27,7 +26,9 @@ function Router() {
   }
   if (!user) return <LoginPage />;
 
-  if (route.startsWith('#/edit/')) return <EditorPage nodeId={route.replace('#/edit/', '')} />;
+  // Datei öffnen läuft über die zweispaltige Dateien-Ansicht (Baum links, Dokument rechts).
+  // #/edit/<id> bleibt gültig, damit alte Links und Lesezeichen weiter funktionieren.
+  if (route.startsWith('#/edit/')) return <FilesPage />;
   if (route.startsWith('#/search')) return <SearchPage />;
   if (route.startsWith('#/trash')) return <TrashPage />;
   if (route.startsWith('#/benachrichtigungen')) return <BenachrichtigungenPage />;

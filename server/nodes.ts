@@ -373,14 +373,19 @@ nodesRouter.get('/:id/download', requireAuth, async (req: AuthRequest, res) => {
     fail(res, 404, 'missing', 'Datei fehlt im Speicher.');
     return;
   }
+  // Umlaute und Sonderzeichen: ASCII-Fallback plus korrekter UTF-8-Name (RFC 5987)
+  const fileName = node.kind === 'folder' ? `${node.name}.zip` : node.name;
+  const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const downloadName = `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
   if (node.kind === 'file') {
     res.setHeader('Content-Type', node.mime || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(node.name)}"`);
+    res.setHeader('Content-Disposition', downloadName);
+    res.setHeader('Content-Length', String(node.size || fs.statSync(full).size));
     fs.createReadStream(full).pipe(res);
     return;
   }
   res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(node.name)}.zip"`);
+  res.setHeader('Content-Disposition', downloadName);
   const archive = archiver('zip', { zlib: { level: 6 } });
   archive.on('error', () => res.destroy());
   archive.pipe(res);
